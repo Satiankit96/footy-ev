@@ -79,17 +79,17 @@ Do not propose, design, or implement any of the following. If asked, push back a
 
 ## Test commands
 
-- `make test` — fast unit tests (target: <30 seconds)
-- `make test-integration` — slower integration tests with sample DuckDB
-- `make lint` — ruff
-- `make typecheck` — mypy --strict
-- `make backtest SEASON=2024-2025 LEAGUE=EPL` — walk-forward backtest
+- `.\make.ps1 test` — fast unit tests (target: <30 seconds)
+- `.\make.ps1 test-integration` — slower integration tests with sample DuckDB
+- `.\make.ps1 lint` — ruff
+- `.\make.ps1 typecheck` — mypy --strict
+- `.\make.ps1 backtest SEASON=2024-2025 LEAGUE=EPL` — walk-forward backtest
 
 ## Bash commands
 
 - Use `uv run <command>` for any Python execution; do not activate the venv manually.
 - Use `uv add <pkg>` to add dependencies, not `pip install`.
-- Long-running commands (scrapers, full-season backtests) go in `scripts/` and are launched via `make`.
+- Long-running commands (scrapers, full-season backtests) go in `scripts/` and are launched via `.\make.ps1`.
 
 ## File discipline
 
