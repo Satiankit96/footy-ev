@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "auto_approve": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(make test*)",
+      "Bash(make lint)",
+      "Bash(make typecheck)",
+      "Bash(make format)",
+      "Bash(make check-stack)",
+      "Bash(uv run pytest*)",
+      "Bash(uv run python -c*)",
+      "Bash(uv run ruff*)",
+      "Bash(uv run mypy*)",
+      "Bash(ls*)",
+      "Bash(cat*)",
+      "Bash(head*)",
+      "Bash(tail*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(curl*betfair*)",
+      "Bash(*LIVE_TRADING=true*)",
+      "Write(.env)",
+      "Edit(.env)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "uv run ruff format \"$CLAUDE_FILE_PATH\" 2>/dev/null && uv run ruff check --fix \"$CLAUDE_FILE_PATH\" 2>/dev/null || true"
+      }
+    ]
+  }
+}
