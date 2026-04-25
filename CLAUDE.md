@@ -16,6 +16,10 @@ For architecture, schema, and code skeletons, read `BLUE_MAP.md`.
 
 The operator is a Data Scientist / Software Engineer student. Skip introductory explanations of ML, Python, databases, or software architecture. Default to advanced-practitioner level.
 
+## Platform
+
+Development runs on **Windows 11 / PowerShell 5.1**. All commands in this file assume PowerShell syntax (`.\make.ps1 <target>`, `$env:FOO`, `Copy-Item`, etc.). GNU `make` is **not** installed; the task runner is `make.ps1` at the project root, which mirrors the Linux Makefile targets and is invoked as `.\make.ps1 install`, `.\make.ps1 test`, etc. Git Bash is available for `uv`, `git`, and `python` but the canonical task runner remains PowerShell.
+
 ## Token discipline (read this every session)
 
 - Default model: `sonnet` (cheaper). Switch to `opus` only for planning multi-file changes or hard architectural calls.
@@ -83,9 +87,8 @@ Do not propose, design, or implement any of the following. If asked, push back a
 - `.\make.ps1 test-integration` — slower integration tests with sample DuckDB
 - `.\make.ps1 lint` — ruff
 - `.\make.ps1 typecheck` — mypy --strict
-- `.\make.ps1 backtest SEASON=2024-2025 LEAGUE=EPL` — walk-forward backtest
 
-## Bash commands
+## Shell commands (PowerShell)
 
 - Use `uv run <command>` for any Python execution; do not activate the venv manually.
 - Use `uv add <pkg>` to add dependencies, not `pip install`.
