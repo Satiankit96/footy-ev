@@ -105,6 +105,96 @@ REGISTRY: tuple[ColumnSpec, ...] = (
     ColumnSpec("B365AHA", "b365_ah_away", "float"),
     ColumnSpec("PAHH", "p_ah_home", "float"),
     ColumnSpec("PAHA", "p_ah_away", "float"),
+    # =====================================================================
+    # Migration 002 promotions: closing-odds families + pre-match AH aggregates.
+    # =====================================================================
+    # --- 1X2 closing odds (9 books × 3 = 27) ---
+    ColumnSpec("B365CH", "b365ch", "float", notes="Bet365 1X2 closing"),
+    ColumnSpec("B365CD", "b365cd", "float"),
+    ColumnSpec("B365CA", "b365ca", "float"),
+    ColumnSpec("BWCH", "bwch", "float"),
+    ColumnSpec("BWCD", "bwcd", "float"),
+    ColumnSpec("BWCA", "bwca", "float"),
+    ColumnSpec("WHCH", "whch", "float"),
+    ColumnSpec("WHCD", "whcd", "float"),
+    ColumnSpec("WHCA", "whca", "float"),
+    ColumnSpec(
+        "PSCH",
+        "psch",
+        "float",
+        notes=(
+            "HIGH VALUE: 14-season Pinnacle closing-odds dataset, primary CLV "
+            "training label. Per CLAUDE.md exception: historical Pinnacle data "
+            "allowed (live Pinnacle API banned)."
+        ),
+    ),
+    ColumnSpec("PSCD", "pscd", "float"),
+    ColumnSpec("PSCA", "psca", "float"),
+    ColumnSpec("IWCH", "iwch", "float"),
+    ColumnSpec("IWCD", "iwcd", "float"),
+    ColumnSpec("IWCA", "iwca", "float"),
+    ColumnSpec("VCCH", "vcch", "float"),
+    ColumnSpec("VCCD", "vccd", "float"),
+    ColumnSpec("VCCA", "vcca", "float"),
+    ColumnSpec("MaxCH", "maxch", "float"),
+    ColumnSpec("MaxCD", "maxcd", "float"),
+    ColumnSpec("MaxCA", "maxca", "float"),
+    ColumnSpec("AvgCH", "avgch", "float"),
+    ColumnSpec("AvgCD", "avgcd", "float"),
+    ColumnSpec("AvgCA", "avgca", "float"),
+    ColumnSpec("BFECH", "bfech", "float"),
+    ColumnSpec("BFECD", "bfecd", "float"),
+    ColumnSpec("BFECA", "bfeca", "float"),
+    # --- Over/Under 2.5 closing (5 books × 2 = 10) ---
+    ColumnSpec("B365C>2.5", "b365c_over_25", "float"),
+    ColumnSpec("B365C<2.5", "b365c_under_25", "float"),
+    ColumnSpec("MaxC>2.5", "maxc_over_25", "float"),
+    ColumnSpec("MaxC<2.5", "maxc_under_25", "float"),
+    ColumnSpec("AvgC>2.5", "avgc_over_25", "float"),
+    ColumnSpec("AvgC<2.5", "avgc_under_25", "float"),
+    ColumnSpec(
+        "PC>2.5",
+        "pc_over_25",
+        "float",
+        notes="Pinnacle closing O/U; historical-only per CLAUDE.md.",
+    ),
+    ColumnSpec("PC<2.5", "pc_under_25", "float"),
+    ColumnSpec("BFEC>2.5", "bfec_over_25", "float"),
+    ColumnSpec("BFEC<2.5", "bfec_under_25", "float"),
+    # --- Asian handicap closing + pre-match aggregates (11 + 4 = 15) ---
+    ColumnSpec("AHCh", "ahc_line", "float", notes="closing AH handicap line"),
+    ColumnSpec("B365CAHH", "b365c_ah_home", "float"),
+    ColumnSpec("B365CAHA", "b365c_ah_away", "float"),
+    ColumnSpec("MaxCAHH", "maxc_ah_home", "float"),
+    ColumnSpec("MaxCAHA", "maxc_ah_away", "float"),
+    ColumnSpec("AvgCAHH", "avgc_ah_home", "float"),
+    ColumnSpec("AvgCAHA", "avgc_ah_away", "float"),
+    ColumnSpec(
+        "PCAHH",
+        "pc_ah_home",
+        "float",
+        notes="Pinnacle closing AH; historical-only per CLAUDE.md.",
+    ),
+    ColumnSpec("PCAHA", "pc_ah_away", "float"),
+    ColumnSpec("BFECAHH", "bfec_ah_home", "float"),
+    ColumnSpec("BFECAHA", "bfec_ah_away", "float"),
+    ColumnSpec("MaxAHH", "max_ah_home", "float"),
+    ColumnSpec("MaxAHA", "max_ah_away", "float"),
+    ColumnSpec("AvgAHH", "avg_ah_home", "float"),
+    ColumnSpec("AvgAHA", "avg_ah_away", "float"),
+    # =====================================================================
+    # DEFERRED — promote on second appearance (per "promote on second appearance" rule):
+    #
+    #   - 1xBet (1XB{H,D,A} open + 1XBC{H,D,A} close): first seen 2024-25 EPL.
+    #   - Betfair non-Exchange (BF{H,D,A} open + BFC{H,D,A} close): first seen 2024-25.
+    #     (Distinct from the registered BFE* Betfair Exchange columns.)
+    #   - Brand-new in 2025-26 EPL: BFD{H,D,A,C*}, BMGM{H,D,A,C*}, BV{H,D,A,C*},
+    #     CL{H,D,A,C*}, plus LBC{H,D,A} (Ladbrokes closing returning?).
+    #
+    # Revisit migration 003 once 2026-27 EPL starts and these columns persist into a
+    # second season. Until promoted, these flow through the extras MAP and create
+    # rows in schema_drift_log on every ingestion (visible to the operator).
+    # =====================================================================
 )
 
 

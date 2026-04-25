@@ -231,6 +231,28 @@ def test_loader_handles_ragged_rows(
     assert sorted(sample_values) == ["10", "7", "9"]
 
 
+def test_loader_extras_keys_unique(db_con: duckdb.DuckDBPyConnection) -> None:
+    """Invariant: every extras MAP has unique keys per row.
+
+    Migration 002 trusts this — when copying ``extras['SourceName'][1]`` (first
+    list element) to a typed column, it assumes only one value per key. Python
+    dict semantics give us this for free at write time, but if a future loader
+    bug ever produced duplicate keys (e.g., case-collisions, source-rename
+    handling), this test catches the regression before migration code blindly
+    reads ``[1]`` and silently drops the rest.
+    """
+    load_season(league="EPL", season="2024-2025", csv_path=FIXTURE_CSV, con=db_con)
+
+    duplicates = db_con.execute(
+        """
+        SELECT COUNT(*) FROM raw_match_results
+        WHERE LEN(map_keys(extras)) <> LEN(list_distinct(map_keys(extras)))
+        """
+    ).fetchone()
+    assert duplicates is not None
+    assert duplicates[0] == 0, f"{duplicates[0]} rows have duplicate extras keys"
+
+
 def test_loader_clean_csv_uses_polars_path(
     db_con: duckdb.DuckDBPyConnection,
     monkeypatch: pytest.MonkeyPatch,

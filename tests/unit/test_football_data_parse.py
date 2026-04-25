@@ -76,9 +76,14 @@ def test_nullable_stats_empty_string() -> None:
 
 
 def test_unknown_column_flows_to_extras() -> None:
-    """Columns not declared on the model land in __pydantic_extra__."""
-    row = FootballDataRow.model_validate(_modern_row(Foo="bar", PSCH=1.72))
-    assert row.__pydantic_extra__ == {"Foo": "bar", "PSCH": 1.72}
+    """Columns not declared on the model land in __pydantic_extra__.
+
+    Uses ``1XBH`` (1xBet 1X2 home opening) — a deferred column per the migration
+    002 "promote on second appearance" rule, so it remains genuinely unknown to
+    the registry until at least migration 003.
+    """
+    row = FootballDataRow.model_validate(_modern_row(Foo="bar", **{"1XBH": 1.72}))
+    assert row.__pydantic_extra__ == {"Foo": "bar", "1XBH": 1.72}
 
 
 def test_rejects_malformed_odds() -> None:

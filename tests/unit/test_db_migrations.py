@@ -11,7 +11,7 @@ def test_apply_migrations_creates_expected_tables() -> None:
     con = duckdb.connect(":memory:")
     applied = apply_migrations(con)
 
-    assert applied == ["001_raw_match_results.sql"]
+    assert applied == ["001_raw_match_results.sql", "002_promote_closing_odds.sql"]
 
     tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
     assert {"raw_match_results", "teams", "schema_drift_log"}.issubset(tables)

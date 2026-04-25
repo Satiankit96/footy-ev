@@ -22,6 +22,8 @@ Development runs on **Windows 11 / PowerShell 5.1**. All commands in this file a
 
 ## Token discipline (read this every session)
 
+- Read only what's needed for the current task. When a task references specific BLUE_MAP sections, read only those sections. Don't read PROJECT_INSTRUCTIONS.md or BLUE_MAP.md in full unless explicitly asked. If unsure which section is relevant, ask one targeted question rather than reading everything defensively.
+
 - Default model: `sonnet` (cheaper). Switch to `opus` only for planning multi-file changes or hard architectural calls.
 - Prefer focused single-file changes over multi-file refactors.
 - Never re-read a file you already have in context unless the file changed.
