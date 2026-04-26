@@ -250,6 +250,41 @@ def test_migration_002_handles_null_extras() -> None:
     assert extras[0] is None
 
 
+def test_migration_002_audit_treats_empty_string_as_no_data() -> None:
+    """Empty-string extras values are treated as 'no data', not as cast failures.
+
+    The loader stores Python ``None`` (i.e., empty CSV cells) as ``""`` in the
+    extras MAP. The audit gate must NOT fire on these — they represent rows
+    where the bookmaker simply didn't quote that market for that match. Phase B
+    leaves the typed column NULL (TRY_CAST('') -> NULL), and Phase C should
+    still scrub the key from extras since the row carries no information.
+    """
+    con = _fresh_db()
+    _insert_sample_row(
+        con,
+        home_team="TestEmpty",
+        extras={"B365CH": "", "PSCH": "", "X_KEEP": "untouched"},
+        b365ch=None,
+    )
+
+    _apply_migration_002(con)  # must not raise
+
+    row = con.execute(
+        "SELECT b365ch, psch, extras FROM raw_match_results WHERE home_team = 'TestEmpty'"
+    ).fetchone()
+    assert row is not None
+    b365ch, psch, extras = row
+
+    # Empty strings cast to NULL and are not data; typed columns stay NULL.
+    assert b365ch is None
+    assert psch is None
+    # Phase C still scrubbed the promoted keys from extras.
+    assert "B365CH" not in extras
+    assert "PSCH" not in extras
+    # Unrelated keys preserved.
+    assert extras.get("X_KEEP") == "untouched"
+
+
 def test_migration_002_audit_gate_rolls_back_phase_c_on_cast_failure() -> None:
     """If extraction can't keep pace with extras keys, audit halts before Phase C.
 

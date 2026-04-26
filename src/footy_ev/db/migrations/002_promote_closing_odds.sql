@@ -176,58 +176,58 @@ WHERE extras IS NOT NULL;
 -- ============================================================================
 
 WITH per_col AS (
-    SELECT 'B365CH' AS col, SUM(CASE WHEN b365ch IS NOT NULL THEN 1 ELSE 0 END) AS typed_count, SUM(CASE WHEN list_contains(map_keys(extras), 'B365CH') THEN 1 ELSE 0 END) AS extras_count FROM raw_match_results
-    UNION ALL SELECT 'B365CD', SUM(CASE WHEN b365cd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'B365CD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'B365CA', SUM(CASE WHEN b365ca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'B365CA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BWCH', SUM(CASE WHEN bwch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BWCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BWCD', SUM(CASE WHEN bwcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BWCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BWCA', SUM(CASE WHEN bwca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BWCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'WHCH', SUM(CASE WHEN whch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'WHCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'WHCD', SUM(CASE WHEN whcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'WHCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'WHCA', SUM(CASE WHEN whca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'WHCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PSCH', SUM(CASE WHEN psch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PSCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PSCD', SUM(CASE WHEN pscd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PSCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PSCA', SUM(CASE WHEN psca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PSCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'IWCH', SUM(CASE WHEN iwch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'IWCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'IWCD', SUM(CASE WHEN iwcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'IWCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'IWCA', SUM(CASE WHEN iwca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'IWCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'VCCH', SUM(CASE WHEN vcch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'VCCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'VCCD', SUM(CASE WHEN vccd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'VCCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'VCCA', SUM(CASE WHEN vcca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'VCCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxCH', SUM(CASE WHEN maxch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxCD', SUM(CASE WHEN maxcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxCA', SUM(CASE WHEN maxca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgCH', SUM(CASE WHEN avgch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgCH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgCD', SUM(CASE WHEN avgcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgCD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgCA', SUM(CASE WHEN avgca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgCA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFECH', SUM(CASE WHEN bfech IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFECH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFECD', SUM(CASE WHEN bfecd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFECD') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFECA', SUM(CASE WHEN bfeca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFECA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'B365C>2.5', SUM(CASE WHEN b365c_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'B365C>2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'B365C<2.5', SUM(CASE WHEN b365c_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'B365C<2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxC>2.5', SUM(CASE WHEN maxc_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxC>2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxC<2.5', SUM(CASE WHEN maxc_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxC<2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgC>2.5', SUM(CASE WHEN avgc_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgC>2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgC<2.5', SUM(CASE WHEN avgc_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgC<2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PC>2.5', SUM(CASE WHEN pc_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PC>2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PC<2.5', SUM(CASE WHEN pc_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PC<2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFEC>2.5', SUM(CASE WHEN bfec_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFEC>2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFEC<2.5', SUM(CASE WHEN bfec_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFEC<2.5') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AHCh', SUM(CASE WHEN ahc_line IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AHCh') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'B365CAHH', SUM(CASE WHEN b365c_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'B365CAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'B365CAHA', SUM(CASE WHEN b365c_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'B365CAHA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxCAHH', SUM(CASE WHEN maxc_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxCAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxCAHA', SUM(CASE WHEN maxc_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxCAHA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgCAHH', SUM(CASE WHEN avgc_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgCAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgCAHA', SUM(CASE WHEN avgc_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgCAHA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PCAHH', SUM(CASE WHEN pc_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PCAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'PCAHA', SUM(CASE WHEN pc_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'PCAHA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFECAHH', SUM(CASE WHEN bfec_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFECAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'BFECAHA', SUM(CASE WHEN bfec_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'BFECAHA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxAHH', SUM(CASE WHEN max_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'MaxAHA', SUM(CASE WHEN max_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'MaxAHA') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgAHH', SUM(CASE WHEN avg_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgAHH') THEN 1 ELSE 0 END) FROM raw_match_results
-    UNION ALL SELECT 'AvgAHA', SUM(CASE WHEN avg_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN list_contains(map_keys(extras), 'AvgAHA') THEN 1 ELSE 0 END) FROM raw_match_results
+    SELECT 'B365CH' AS col, SUM(CASE WHEN b365ch IS NOT NULL THEN 1 ELSE 0 END) AS typed_count, SUM(CASE WHEN (extras['B365CH'] IS NOT NULL AND extras['B365CH'] <> '') THEN 1 ELSE 0 END) AS extras_count FROM raw_match_results
+    UNION ALL SELECT 'B365CD', SUM(CASE WHEN b365cd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['B365CD'] IS NOT NULL AND extras['B365CD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'B365CA', SUM(CASE WHEN b365ca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['B365CA'] IS NOT NULL AND extras['B365CA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BWCH', SUM(CASE WHEN bwch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BWCH'] IS NOT NULL AND extras['BWCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BWCD', SUM(CASE WHEN bwcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BWCD'] IS NOT NULL AND extras['BWCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BWCA', SUM(CASE WHEN bwca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BWCA'] IS NOT NULL AND extras['BWCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'WHCH', SUM(CASE WHEN whch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['WHCH'] IS NOT NULL AND extras['WHCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'WHCD', SUM(CASE WHEN whcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['WHCD'] IS NOT NULL AND extras['WHCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'WHCA', SUM(CASE WHEN whca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['WHCA'] IS NOT NULL AND extras['WHCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PSCH', SUM(CASE WHEN psch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PSCH'] IS NOT NULL AND extras['PSCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PSCD', SUM(CASE WHEN pscd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PSCD'] IS NOT NULL AND extras['PSCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PSCA', SUM(CASE WHEN psca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PSCA'] IS NOT NULL AND extras['PSCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'IWCH', SUM(CASE WHEN iwch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['IWCH'] IS NOT NULL AND extras['IWCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'IWCD', SUM(CASE WHEN iwcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['IWCD'] IS NOT NULL AND extras['IWCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'IWCA', SUM(CASE WHEN iwca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['IWCA'] IS NOT NULL AND extras['IWCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'VCCH', SUM(CASE WHEN vcch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['VCCH'] IS NOT NULL AND extras['VCCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'VCCD', SUM(CASE WHEN vccd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['VCCD'] IS NOT NULL AND extras['VCCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'VCCA', SUM(CASE WHEN vcca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['VCCA'] IS NOT NULL AND extras['VCCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxCH', SUM(CASE WHEN maxch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxCH'] IS NOT NULL AND extras['MaxCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxCD', SUM(CASE WHEN maxcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxCD'] IS NOT NULL AND extras['MaxCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxCA', SUM(CASE WHEN maxca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxCA'] IS NOT NULL AND extras['MaxCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgCH', SUM(CASE WHEN avgch IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgCH'] IS NOT NULL AND extras['AvgCH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgCD', SUM(CASE WHEN avgcd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgCD'] IS NOT NULL AND extras['AvgCD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgCA', SUM(CASE WHEN avgca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgCA'] IS NOT NULL AND extras['AvgCA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFECH', SUM(CASE WHEN bfech IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFECH'] IS NOT NULL AND extras['BFECH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFECD', SUM(CASE WHEN bfecd IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFECD'] IS NOT NULL AND extras['BFECD'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFECA', SUM(CASE WHEN bfeca IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFECA'] IS NOT NULL AND extras['BFECA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'B365C>2.5', SUM(CASE WHEN b365c_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['B365C>2.5'] IS NOT NULL AND extras['B365C>2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'B365C<2.5', SUM(CASE WHEN b365c_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['B365C<2.5'] IS NOT NULL AND extras['B365C<2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxC>2.5', SUM(CASE WHEN maxc_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxC>2.5'] IS NOT NULL AND extras['MaxC>2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxC<2.5', SUM(CASE WHEN maxc_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxC<2.5'] IS NOT NULL AND extras['MaxC<2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgC>2.5', SUM(CASE WHEN avgc_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgC>2.5'] IS NOT NULL AND extras['AvgC>2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgC<2.5', SUM(CASE WHEN avgc_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgC<2.5'] IS NOT NULL AND extras['AvgC<2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PC>2.5', SUM(CASE WHEN pc_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PC>2.5'] IS NOT NULL AND extras['PC>2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PC<2.5', SUM(CASE WHEN pc_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PC<2.5'] IS NOT NULL AND extras['PC<2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFEC>2.5', SUM(CASE WHEN bfec_over_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFEC>2.5'] IS NOT NULL AND extras['BFEC>2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFEC<2.5', SUM(CASE WHEN bfec_under_25 IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFEC<2.5'] IS NOT NULL AND extras['BFEC<2.5'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AHCh', SUM(CASE WHEN ahc_line IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AHCh'] IS NOT NULL AND extras['AHCh'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'B365CAHH', SUM(CASE WHEN b365c_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['B365CAHH'] IS NOT NULL AND extras['B365CAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'B365CAHA', SUM(CASE WHEN b365c_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['B365CAHA'] IS NOT NULL AND extras['B365CAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxCAHH', SUM(CASE WHEN maxc_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxCAHH'] IS NOT NULL AND extras['MaxCAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxCAHA', SUM(CASE WHEN maxc_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxCAHA'] IS NOT NULL AND extras['MaxCAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgCAHH', SUM(CASE WHEN avgc_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgCAHH'] IS NOT NULL AND extras['AvgCAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgCAHA', SUM(CASE WHEN avgc_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgCAHA'] IS NOT NULL AND extras['AvgCAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PCAHH', SUM(CASE WHEN pc_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PCAHH'] IS NOT NULL AND extras['PCAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'PCAHA', SUM(CASE WHEN pc_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['PCAHA'] IS NOT NULL AND extras['PCAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFECAHH', SUM(CASE WHEN bfec_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFECAHH'] IS NOT NULL AND extras['BFECAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'BFECAHA', SUM(CASE WHEN bfec_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['BFECAHA'] IS NOT NULL AND extras['BFECAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxAHH', SUM(CASE WHEN max_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxAHH'] IS NOT NULL AND extras['MaxAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'MaxAHA', SUM(CASE WHEN max_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['MaxAHA'] IS NOT NULL AND extras['MaxAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgAHH', SUM(CASE WHEN avg_ah_home IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgAHH'] IS NOT NULL AND extras['AvgAHH'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
+    UNION ALL SELECT 'AvgAHA', SUM(CASE WHEN avg_ah_away IS NOT NULL THEN 1 ELSE 0 END), SUM(CASE WHEN (extras['AvgAHA'] IS NOT NULL AND extras['AvgAHA'] <> '') THEN 1 ELSE 0 END) FROM raw_match_results
 )
 SELECT CAST(
     CASE
