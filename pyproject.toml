@@ -36,6 +36,9 @@ dependencies = [
     "loguru>=0.7.0",
     "python-dotenv>=1.0.0",
     "keyring>=25.0.0",
+    # Dashboard
+    "streamlit>=1.36.0",
+    "altair>=5.3.0",
 ]
 
 [dependency-groups]
@@ -61,7 +64,15 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "TCH"]
-ignore = ["E501"]  # line length handled by formatter
+ignore = [
+    "E501",   # line length handled by formatter
+    "B008",   # typer idiom: `typer.Option(...)` in argument defaults is canonical
+    "N806",   # ML convention: uppercase X / X_pd / X_p design matrices are standard
+    "N818",   # domain exceptions (InsufficientTrainingData) named for clarity, not -Error suffix
+    "TCH001", # moving runtime-used app imports into TYPE_CHECKING is brittle for typer/duckdb
+    "TCH002", # same for third-party
+    "TCH003", # same for stdlib
+]
 
 [tool.mypy]
 python_version = "3.12"
@@ -75,6 +86,11 @@ exclude = ["notebooks/", "build/", "dist/"]
 [[tool.mypy.overrides]]
 module = ["duckdb.*", "shap.*", "goto_conversion.*", "playwright.*", "ollama.*", "google.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+check_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
