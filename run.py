@@ -25,6 +25,17 @@ app = typer.Typer(add_completion=False, help="footy-ev canonical pipeline orches
 DEFAULT_DB_PATH = Path("data/warehouse/footy_ev.duckdb")
 
 
+@app.callback(invoke_without_command=True)  # type: ignore[misc]
+def _root(ctx: typer.Context) -> None:
+    """Print help when invoked with no subcommand."""
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        typer.echo(
+            "\nTry `python run.py status` for a quick overview, "
+            "or `python run.py --help` for all commands."
+        )
+
+
 def _open_db(db_path: Path) -> duckdb.DuckDBPyConnection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(db_path))
