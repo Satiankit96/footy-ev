@@ -29,7 +29,6 @@ from typing import Any
 import duckdb
 from pydantic import ValidationError
 
-from footy_ev.ingestion.understat import UnderstatParseError
 from footy_ev.ingestion.understat.parse import UnderstatMatchRecord, parse_payload
 from footy_ev.ingestion.understat.source import build_url
 
@@ -186,9 +185,7 @@ def _bulk_write(
     col_list = ", ".join(_ALL_COLS)
     placeholders = ", ".join(["?"] * len(_ALL_COLS))
     if upsert:
-        update_set = ", ".join(
-            f"{col} = EXCLUDED.{col}" for col in _ALL_COLS if col != _PK_COL
-        )
+        update_set = ", ".join(f"{col} = EXCLUDED.{col}" for col in _ALL_COLS if col != _PK_COL)
         sql = (
             f"INSERT INTO raw_understat_matches ({col_list}) VALUES ({placeholders})"
             f" ON CONFLICT ({_PK_COL}) DO UPDATE SET {update_set}"
@@ -333,11 +330,7 @@ if __name__ == "__main__":
     con = duckdb.connect(":memory:")
     apply_migrations(con)
     fixture = (
-        Path(__file__).resolve().parents[4]
-        / "tests"
-        / "fixtures"
-        / "understat"
-        / "EPL_2023.json"
+        Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "understat" / "EPL_2023.json"
     )
     report = load_season(league="EPL", season="2023-2024", json_path=fixture, con=con)
     print(f"report: {report}")

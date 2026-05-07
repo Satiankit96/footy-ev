@@ -38,6 +38,9 @@ dist/
 *.log
 logs/
 
+# Generated backtest reports
+reports/
+
 # Secrets
 secrets/
 *.key

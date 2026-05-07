@@ -26,10 +26,14 @@ from footy_ev.ingestion.understat import UnderstatFetchError
 from footy_ev.ingestion.understat.loader import (
     UnderstatLoadReport,
     detect_unmapped_teams,
+)
+from footy_ev.ingestion.understat.loader import (
     load_season as load_understat_season,
 )
 from footy_ev.ingestion.understat.source import (
     UNDERSTAT_RATE_LIMIT_SECS,
+)
+from footy_ev.ingestion.understat.source import (
     fetch_season as fetch_understat_season,
 )
 
@@ -145,9 +149,7 @@ def _do_ingest_understat_league(
             except UnderstatFetchError as exc:
                 typer.echo(f"[understat {league} {s}] fetch failed: {exc}; skipping")
                 continue
-            report = load_understat_season(
-                league=league, season=s, json_path=json_path, con=con
-            )
+            report = load_understat_season(league=league, season=s, json_path=json_path, con=con)
             typer.echo(_format_understat_report(league, s, report))
             if i < len(seasons) - 1:
                 _understat_politeness_sleep()
@@ -205,9 +207,7 @@ def ingest_understat_season(
     con = _open_db(db_path)
     try:
         json_path = fetch_understat_season(league, season, raw_dir=raw_dir, refresh=refresh)
-        report = load_understat_season(
-            league=league, season=season, json_path=json_path, con=con
-        )
+        report = load_understat_season(league=league, season=season, json_path=json_path, con=con)
         typer.echo(_format_understat_report(league, season, report))
     finally:
         con.close()

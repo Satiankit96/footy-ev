@@ -17,12 +17,10 @@ compatible setup.
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import duckdb
-import pytest
 
 from footy_ev.db import apply_migrations, apply_views
 from footy_ev.ingestion.understat.loader import (
@@ -114,9 +112,7 @@ def test_understat_loader_upsert_idempotency() -> None:
     """Loading the same fixture twice yields no duplicates."""
     con = _fresh_db()
 
-    report1 = load_season(
-        league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con
-    )
+    report1 = load_season(league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con)
     assert report1.inserted == 380
     assert report1.unchanged == 0
     assert report1.updated == 0
@@ -125,9 +121,7 @@ def test_understat_loader_upsert_idempotency() -> None:
     n1 = con.execute("SELECT COUNT(*) FROM raw_understat_matches").fetchone()
     assert n1[0] == 380
 
-    report2 = load_season(
-        league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con
-    )
+    report2 = load_season(league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con)
     assert report2.inserted == 0
     assert report2.updated == 0
     assert report2.unchanged == 380
@@ -144,12 +138,8 @@ def test_understat_loader_hash_short_circuit() -> None:
     """Identical second load short-circuits via source_row_hash match."""
     con = _fresh_db()
 
-    load_season(
-        league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con
-    )
-    report2 = load_season(
-        league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con
-    )
+    load_season(league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con)
+    report2 = load_season(league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con)
     # Hash unchanged -> all rows fall through to unchanged bucket
     assert report2.unchanged == 380
     assert report2.inserted == 0
@@ -169,9 +159,7 @@ def test_understat_loader_unknown_key_logs_drift(tmp_path: Path) -> None:
     matches[2]["referee_xg"] = "0.42"  # second unknown key for variety
     json_path = _write_payload(tmp_path, matches)
 
-    report = load_season(
-        league="EPL", season="2024-2025", json_path=json_path, con=con
-    )
+    report = load_season(league="EPL", season="2024-2025", json_path=json_path, con=con)
 
     assert "weather" in report.unknown_keys
     assert "referee_xg" in report.unknown_keys
@@ -263,15 +251,24 @@ def test_understat_loader_temporal_alias_join() -> None:
 
     # Three matches.
     _insert_understat_row(
-        con, match_id="m1", h_raw="OldName", a_raw="Stable",
+        con,
+        match_id="m1",
+        h_raw="OldName",
+        a_raw="Stable",
         kickoff_local="2019-11-15 15:00:00",
     )
     _insert_understat_row(
-        con, match_id="m2", h_raw="NewName", a_raw="Stable",
+        con,
+        match_id="m2",
+        h_raw="NewName",
+        a_raw="Stable",
         kickoff_local="2021-03-10 15:00:00",
     )
     _insert_understat_row(
-        con, match_id="m3", h_raw="OldName", a_raw="Stable",
+        con,
+        match_id="m3",
+        h_raw="OldName",
+        a_raw="Stable",
         kickoff_local="2021-03-10 15:00:00",
     )
 
@@ -283,9 +280,9 @@ def test_understat_loader_temporal_alias_join() -> None:
         """
     ).fetchall()
     assert rows == [
-        ("m1", "foo_team", "bar_team"),    # OldName in-window pre-rebrand
-        ("m2", "foo_team", "bar_team"),    # NewName in-window post-rebrand
-        ("m3", None,       "bar_team"),    # OldName out-of-window post-rebrand -> NULL
+        ("m1", "foo_team", "bar_team"),  # OldName in-window pre-rebrand
+        ("m2", "foo_team", "bar_team"),  # NewName in-window post-rebrand
+        ("m3", None, "bar_team"),  # OldName out-of-window post-rebrand -> NULL
     ]
 
 
@@ -295,7 +292,5 @@ def test_understat_loader_temporal_alias_join() -> None:
 def test_understat_loader_report_invariant_holds() -> None:
     """LoadReport.total() == inserted + updated + unchanged + rejected."""
     con = _fresh_db()
-    report = load_season(
-        league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con
-    )
+    report = load_season(league="EPL", season="2023-2024", json_path=COMPLETED_FIXTURE, con=con)
     assert report.total() == report.inserted + report.updated + report.unchanged + report.rejected

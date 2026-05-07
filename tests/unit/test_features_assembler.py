@@ -100,9 +100,9 @@ def test_pit_null_rolling_for_insufficient_history() -> None:
 
     # PIT mode: this fixture has 0 preceding matches per team → NULL rolling
     df = build_feature_matrix(con, fids, as_of, xg_skellam_run_id="", mode="pit")
-    assert (
-        df.height == 0 or df["home_xg_for_5"].is_null().all()
-    ), "expected NULL home_xg_for_5 for fixture with no prior team history"
+    assert df.height == 0 or df["home_xg_for_5"].is_null().all(), (
+        "expected NULL home_xg_for_5 for fixture with no prior team history"
+    )
 
 
 def test_pit_non_null_rolling_after_enough_history() -> None:
@@ -126,9 +126,9 @@ def test_pit_non_null_rolling_after_enough_history() -> None:
     # The last fixture (6th) should have non-null home_goals_for_5
     if df.height > 0:
         last = df.sort("fixture_id").tail(1)
-        assert (
-            last["home_goals_for_5"][0] is not None
-        ), "expected non-null home_goals_for_5 after 5 prior matches"
+        assert last["home_goals_for_5"][0] is not None, (
+            "expected non-null home_goals_for_5 after 5 prior matches"
+        )
 
 
 def test_xg_skellam_defaults_to_half() -> None:
@@ -148,9 +148,9 @@ def test_xg_skellam_defaults_to_half() -> None:
         con, fids, as_of, xg_skellam_run_id="nonexistent-run-id", mode="snapshot"
     )
     if df.height > 0:
-        assert (
-            df["xg_skellam_p_over"] == 0.5
-        ).all(), "xg_skellam_p_over should be 0.5 when no model_predictions found"
+        assert (df["xg_skellam_p_over"] == 0.5).all(), (
+            "xg_skellam_p_over should be 0.5 when no model_predictions found"
+        )
 
 
 def test_xg_skellam_at_exact_as_of_is_included() -> None:

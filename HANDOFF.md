@@ -1,184 +1,232 @@
-# Handoff — end of Phase 0 step 2 (Understat ingestion complete)
+# Handoff — end of Phase 2 step 1 (XGBoost O/U 2.5 infrastructure landed)
 
-> Created **2026-05-01** at the close of TASK 3 (Understat loader + CLI + view + bootstrap aliases). Read this in full before doing anything else, then `LEARNING_LOG.md` (when it exists), then dive into the codebase. The previous `HANDOFF.md` (TASK 1 era — migration 002 audit blocker) is preserved at `HANDOFF.md.archive-2026-04-26` for historical reference.
+> Created **2026-05-06** at the close of Phase 2 step 1. Read this in full before doing anything else, then `CLAUDE.md`, then dive into the codebase. The previous `HANDOFF.md` (Phase 0 step 2 era — Understat ingestion + alias view) is not archived separately; its content has been compressed into §6 below.
 
 ---
 
 ## 1. Status banner
 
-We are at the **end of Phase 0 step 2** of the project plan in `PROJECT_INSTRUCTIONS.md` §10. Phase 0 step 1 (football-data.co.uk historical match data + closing-odds promotions) is shipped. Phase 0 step 2 (Understat per-match xG ingestion) is shipped, including a temporal-aware entity-resolution layer (`team_aliases` + `v_understat_matches` view). The warehouse holds **9,832** football-data rows + **4,560** Understat rows for EPL across 2000-01 → 2025-26 (football-data) and 2014-15 → 2025-26 (Understat). Test suite is **71 passed / 2 skipped (network-gated) / 1 xfailed (Cat-G/H bookmakers, expected)**. Zero unmapped raw team names in `v_understat_matches`. The TASK 3 chunk is uncommitted — your immediate next action is to review the diff and commit the chunk.
+We are at the **end of Phase 2 step 1**, ~45% through the overall project plan.
 
-After commit, the open architectural decision is whether to **(a)** extend ingestion to the other four target leagues (La Liga, Serie A, Bundesliga, Ligue 1) before starting Phase 1, or **(b)** start Phase 1 (Dixon-Coles + xG-Skellam baselines) on EPL-only and add the other leagues in parallel later. See §4 for the trade-off.
+**Test suite: 138 unit passed / 10 integration passed / 2 skipped (network-gated) / 1 xfailed (Cat-G/H bookmaker columns, expected, unchanged since Phase 0).**
+
+### Phase 1 — CLOSED
+
+Dixon-Coles 1X2 is **dead** (NO_GO verdict on CLV vs Pinnacle close; mean edge on realized winners ≤ 0 at canonical sample). xG-Skellam O/U 2.5 is the live baseline, confirmed at **MARGINAL_SIGNAL** (mean edge > 0, bootstrap 95% CI crosses zero, p = 0.038). The project accepted this as an operational green-light because all 7 seasons are individually positive and the CI crossing zero is a sample-size artefact, not a structural contradiction.
+
+**Locked Phase 1 config:**
+- Model: `xg_skellam_v1`
+- `xi_decay = 0.0` (uniform weighting — decay weakened signal in all diagnostics)
+- `no_calibrate = True` (isotonic calibration broke CLV in both DC and xG-Skellam; isotonic is suspended; future calibration approach is an open question)
+- Baseline run in live warehouse: `run_id = 034bb631-83e8-4fdf-a7f5-1189bd107df6`
+- Verdict: MARGINAL_SIGNAL, p = 0.038, all 7 seasons (2018-19 → 2024-25) positive
+
+### Phase 2 step 1 — CLOSED (infrastructure only)
+
+XGBoost binary classifier (O/U 2.5, `xgb_ou25_v1`) fully wired:
+- 15 SQL features (rolling team form + xG) + 1 stacked feature (xg_skellam_p_over) + 1 audit_noise canary = 16 features total
+- PIT (walk-forward window functions) and snapshot (GROUP BY) modes in `features/assembler.py`
+- `features.md` written with domain rationale before training code was invoked
+- Permutation importance gate fires per-fold; writes to `xgb_feature_importances` keyed by `fit_id`
+- Migration 007 (`xgb_fits` + `xgb_feature_importances`) applied
+- `make.ps1` wired: `.\make.ps1 backtest-epl -ModelVersion xgb_ou25_v1 -XgSkellamRunId <run_id>`
+
+**The canonical XGBoost backtest has NOT been run yet.** That is the immediate next operator action in the new chat session.
 
 ---
 
-## 2. What's in the warehouse right now
+## 2. Key file locations
 
-`data/warehouse/footy_ev.duckdb` (DuckDB, mutable write surface — see invariant 6 below).
-
-| Table / View | Rows | Coverage | Notes |
-|---|---|---|---|
-| `raw_match_results` | 9,832 | EPL, 2000-01 → 2025-26 | Football-data.co.uk. 2025-26 is in-progress (≈332/380 played as of last football-data ingest; refresh re-runs are idempotent via `source_row_hash`). |
-| `raw_understat_matches` | 4,560 | EPL, 2014-15 → 2025-26 | Understat AJAX `/getLeagueData/EPL/<year>`. 2025-26 is in-progress (339/380 played as of last understat ingest on 2026-04-30). |
-| `team_aliases` | 70 | EPL, 35 distinct `team_id`s | 35 football_data + 35 understat rows. Bootstrapped via `scripts/seed_team_aliases.sql`. NOT auto-applied — operator-run only. |
-| `v_understat_matches` | 4,560 (parity) | matches base table 1:1 | Live view; 0 rows with NULL team_id. Re-applied by `apply_views()` on every `_open_db` call. |
-| `schema_drift_log` | (only football-data drift, mostly resolved by migration 002) | — | Zero rows for `source='understat'` — Understat's payload shape is stable. The remaining football-data drift is the Cat-G/H bookmaker columns deferred for a future migration 004. |
-| `teams` | 0 | — | Empty placeholder. `team_aliases.team_id` is the de-facto canonical for now. Populating `teams` is a Phase 1 prereq when we need attack/defense parameters per team. |
-
-Migrations applied (lexically): `001_raw_match_results.sql`, `002_promote_closing_odds.sql`, `003_raw_understat_matches.sql`. Views applied (lexically): `v_understat_matches.sql`.
-
-Raw cache on disk: `data/raw/football_data/E0/<season_code>.csv` and `data/raw/understat/EPL/<season>.json` + `.sha256` sidecar. Raw files are immutable per CLAUDE.md.
+| Path | Purpose |
+|---|---|
+| `src/footy_ev/features/assembler.py` | `build_feature_matrix(con, fixture_ids, as_of, xg_skellam_run_id, *, mode)` — 15 SQL features; PIT + snapshot modes |
+| `src/footy_ev/features/__init__.py` | Exports `FEATURE_NAMES` (15 items, no audit_noise) and `build_feature_matrix` |
+| `features.md` | Domain rationale for all 16 features; PIT argument for stacked feature |
+| `src/footy_ev/models/xgboost_ou25.py` | `XGBoostOU25Fit`, `fit(feature_df, labels, *, as_of, xg_skellam_run_id)`, `predict_ou25(fitted, feat_row)` |
+| `src/footy_ev/eval/feature_audit.py` | `permutation_importance_gate(fitted, test_features, test_labels, *, n_null=100, rng_seed=0)` |
+| `src/footy_ev/backtest/walkforward.py` | Walk-forward harness with `xgb_ou25_v1` path; XGBoost registry entry has `needs_features=True` |
+| `src/footy_ev/db/migrations/007_xgb_artifacts.sql` | `xgb_fits` + `xgb_feature_importances` tables |
+| `src/footy_ev/eval/cli.py` | `evaluate_run(con, run_id, *, devig_method, reports_dir, no_calibrate)` |
+| `src/footy_ev/eval/bootstrap.py` | `bootstrap_edge_ci(con, run_id, *, n_resamples, alpha, rng_seed)` — percentile bootstrap on winners |
+| `reports/` | Markdown reports from `evaluate_run`; one per run_id |
+| `data/warehouse/footy_ev.duckdb` | Live warehouse; mutable write surface |
 
 ---
 
 ## 3. Architectural invariants
 
-These are load-bearing — break them and the project fails in subtle ways. **`LEARNING_LOG.md` does not yet exist**; the operator plans to migrate this list (and the recent-decisions log in §6) into it. Until then, this file is the canonical record.
+Load-bearing. Break these and the project fails in subtle ways.
 
-1. **CLV vs Betfair SP is the North Star metric.** Raw P&L is secondary. Any backtest report missing CLV is incomplete. (PROJECT_INSTRUCTIONS §6, BLUE_MAP §1.1)
-2. **Walk-forward only on time-series.** K-fold CV is banned. (CLAUDE.md, BLUE_MAP §1.5, §7)
-3. **Point-in-time correctness is mandatory.** Every feature view must accept `:as_of` and filter all source tables on `event_timestamp < :as_of`. No backdated news/lineups. (BLUE_MAP §6.1, §8)
-4. **Append-only ledgers** for odds and events. No updates, no deletes on historical match rows except via the upsert-with-hash pattern (which preserves `inserted_at` history through the `source_row_hash` short-circuit).
-5. **Raw downloaded data is immutable.** `data/raw/` is the source-of-truth archive. Never modify a cached file in place; if the upstream changes, capture a new file. (CLAUDE.md "File discipline")
-6. **DuckDB tables are the mutable write surface; Parquet archive nightly; unified `v_*` views join both.** Downstream code queries `v_*` views and is agnostic to which side data came from. (Migration 001 header)
-7. **Migrations are append-only and idempotent.** Every migration uses `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` / `ALTER TABLE ADD COLUMN IF NOT EXISTS`. No version-tracking ledger yet — add one when we have a migration that can't be expressed idempotently. (`src/footy_ev/db/__init__.py`)
-8. **Entity resolution happens at QUERY time, not ingest time.** Loaders write raw `home_team_raw` / `away_team_raw` strings verbatim. The `team_aliases` table maps `(source, raw_name)` → `team_id`, with optional temporal bounds. Views (e.g., `v_understat_matches`) do the join. Fuzzy matching at ingest is banned — it would poison the canonical `teams` table. (Task 3 design)
-9. **Pinnacle: historical closing-odds OK, live API banned.** PSC{H,D,A} is the 14-season Pinnacle CLV training label and is allowed because it's static CSV data. The live Pinnacle API (shut down July 2025) is permanently banned. (CLAUDE.md, migration 002 header)
-10. **Real-money trading is gated on `LIVE_TRADING=true` AND the §3 PROJECT_INSTRUCTIONS bankroll discipline conditions.** Default behavior is paper-only. Soft-book limiting awareness is a design constraint, not an afterthought — execution router must degrade gracefully when a venue starts limiting. (PROJECT_INSTRUCTIONS §3, BLUE_MAP §1.2, §5)
-
-Adjacent invariants reinforced by recent work (more flexible — these are codified in code review patterns rather than hard rules):
-
-11. **Pydantic v2 `extra="allow"` + `extras` MAP column + `schema_drift_log`** is the canonical drift-handling pattern for any new ingestion source. Unknown source fields survive verbatim; `loader.py` logs them; operator periodically reviews and either promotes (migration) or marks resolved. Mirrors football_data and understat exactly.
-12. **`source_row_hash` short-circuit for idempotent upserts.** sha256 over canonical-encoded parsed dict (including extras). On re-load, hash equality skips the upsert. The football_data loader's `total = inserted + updated + unchanged + rejected` accounting invariant is the canary; same applies to the understat loader.
-13. **Typed-variant Pydantic fields are tripwires, not cosmetic.** `StrictBool` on `is_result` rejects coerced strings → loud failure on upstream encoding drift. `NaiveDatetime` / `AwareDatetime` pin the TZ contract at the model boundary. Use them deliberately when the contract matters.
+1. **CLV vs Pinnacle close (and eventually Betfair SP) is the North Star metric.** Raw P&L is secondary. Any backtest report missing CLV is incomplete. (PROJECT_INSTRUCTIONS §6, BLUE_MAP §1.1)
+2. **Walk-forward only on time-series. K-fold CV is banned.** (CLAUDE.md, BLUE_MAP §1.5, §7)
+3. **Point-in-time correctness is mandatory at every feature computation boundary.** Training features use `kickoff_utc < train_cutoff`. Stacked features (xg_skellam → XGBoost) use `mp.as_of < train_cutoff`, `ROW_NUMBER() … ORDER BY as_of DESC` to pick the most recent fold, never a future fold. (BLUE_MAP §6.1, §8)
+4. **Append-only ledgers for odds and events.** No updates, no deletes on historical match rows except via `source_row_hash` upsert pattern.
+5. **Raw downloaded data is immutable.** `data/raw/` is the archive. Never modify a cached file in place.
+6. **DuckDB tables are the mutable write surface; Parquet archive nightly; `v_*` views join both.** Downstream code queries `v_*` views and is agnostic to which side data came from.
+7. **Migrations are append-only and idempotent.** Every migration uses `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`. Currently 7 applied (001–007).
+8. **Entity resolution happens at QUERY time, not ingest time.** `team_aliases.(source, raw_name) → team_id` joined inside `v_*` views. Fuzzy matching at ingest is banned.
+9. **Pinnacle: historical closing-odds allowed, live API banned.** `PSC{H,D,A}` in football-data CSVs is the 14-season CLV training label. Live Pinnacle API shut down July 2025; permanently off-limits.
+10. **Real-money trading gated on `LIVE_TRADING=true` AND bankroll discipline conditions in PROJECT_INSTRUCTIONS §3.** Default is paper-only.
+11. **Calibration layer is currently disabled.** Isotonic broke CLV in all DC and xG-Skellam diagnostic runs (calibrated Brier improved but CLV edge degraded). `no_calibrate=True` is the production config until a better calibration approach is identified (Platt? Beta? Skip entirely?). Do not re-enable isotonic without a fresh diagnostic.
+12. **XGBoost feature audit fires per-fold.** `permutation_importance_gate` is called inside the fold loop after each XGBoost fit, writing 16 rows to `xgb_feature_importances` keyed by `fit_id`. The `audit_noise` random uniform column is a deliberate canary — if it appears above the null baseline CI in any fold, that is a bug signal (data leakage or overfit), not a real feature.
+13. **Stacked feature PIT contract.** `xg_skellam_p_over` uses `WHERE mp.as_of < train_cutoff` (strict less-than) with `ROW_NUMBER() OVER (PARTITION BY fixture_id ORDER BY as_of DESC) = 1` to pick the most-recent pre-cutoff Skellam prediction. Fixtures with no qualifying row get `COALESCE(…, 0.5)`. This is belt-and-suspenders PIT.
+14. **`audit_noise` is added by the walkforward harness, never by the assembler.** `FEATURE_NAMES` (15 items) does not include `audit_noise`. The harness adds it after calling `build_feature_matrix`. Train RNG: `np.random.default_rng(fold_idx)`; test RNG: `np.random.default_rng(fold_idx + 1_000_000)`.
+15. **No mocking the database in integration tests.** Use real (in-memory or temp-file) DuckDB.
+16. **No f-string SQL with user/source-derived values.** View/table names from internal code (not user input) are OK in f-strings. All data values must be parameterized.
 
 ---
 
 ## 4. What's next, ordered
 
-### Immediate: commit the TASK 3 chunk
+### Immediate: canonical XGBoost backtest (first move in new chat session)
 
-Suggested message skeleton (operator writes the actual commit message):
-
-```
-feat(understat): ingest per-match xG via AJAX endpoint, with team-alias view
-
-  - migration 003: raw_understat_matches + team_aliases (temporal columns
-    for future-proofing rebrands; bootstrap rows leave bounds NULL)
-  - source.py: AJAX getLeagueData endpoint with X-Requested-With header
-    (HTML inline-JSON deprecated by Understat Dec 2025; AJAX confirmed
-    via understatapi v0.7.1 source — see commit 2025-12-17 there)
-  - parse.py: Pydantic model with StrictBool + NaiveDatetime/AwareDatetime
-    typed variants; convert_kickoff via stdlib zoneinfo (no pytz dep)
-  - loader.py: ON CONFLICT upsert by understat_match_id, source_row_hash
-    short-circuit, schema_drift_log on extras
-  - CLI: ingest-understat-{season,league}, understat-detect-unmapped
-  - bootstrap seed: 70 alias rows covering EPL 2014-15 → 2025-26 (35
-    teams × 2 sources)
-  - view: v_understat_matches with temporal alias join
-  - tests: +18 unit (parse 11 + loader 6 + db_migrations 1) + 1 gated
-    integration; 71 passed total
+```powershell
+.\make.ps1 backtest-epl `
+    -ModelVersion xgb_ou25_v1 `
+    -XgSkellamRunId 034bb631-83e8-4fdf-a7f5-1189bd107df6 `
+    -TrainMinSeasons 3 `
+    -StepDays 7
 ```
 
-Commit covers `src/footy_ev/db/migrations/003_*`, `src/footy_ev/db/views/v_understat_matches.sql`, `src/footy_ev/db/__init__.py`, `src/footy_ev/ingestion/understat/`, `src/footy_ev/ingestion/cli.py`, `make.ps1`, `scripts/seed_team_aliases.sql`, `tests/fixtures/understat/`, `tests/unit/test_understat_*.py`, `tests/unit/test_db_migrations.py`, `tests/integration/test_understat_real.py`, this `HANDOFF.md`, archived `HANDOFF.md.archive-2026-04-26`.
+Then evaluate:
+```powershell
+.\make.ps1 evaluate-run -RunId <uuid-from-above> -NoCalibrate
+```
 
-### Short-term: Phase 0 closeout decision
+Inspect `reports/run_<uuid>.md` for verdict. Also query:
+```sql
+SELECT feature_name, AVG(importance_gain), AVG(permutation_importance),
+       SUM(below_null_baseline::INT) AS n_below_null
+FROM xgb_feature_importances
+JOIN xgb_fits USING (fit_id)
+WHERE model_version = 'xgb_ou25_v1'
+GROUP BY feature_name
+ORDER BY AVG(importance_gain) DESC;
+```
+This is the fold-stability check (BLUE_MAP §7.3).
 
-**Option A — Multi-league ingestion before Phase 1.** Extend football_data + understat to La Liga, Serie A, Bundesliga, Ligue 1. Adds ~4× ingest time, ~60-80 more rows in `team_aliases`, and four more frozen-fixture seasons. Ingestion code is league-agnostic; only the `LEAGUE_TO_SOURCE_CODE` / `LEAGUE_TO_UNDERSTAT_CODE` maps need extending. Frozen-fixture tests for the parser would need one per league (defensible against future per-league source-shape drift).
+### Short-term: Phase 2 step 2 (after canonical run)
 
-**Option B — Start Phase 1 on EPL-only.** Ship Dixon-Coles 1X2 + xG-Skellam goals-totals + walk-forward backtest + isotonic calibration on a single league first. Single-league sample is ~9,800 matches (CLV-trainable) and is sufficient for the baseline. Add other leagues in parallel once the scaffolding is in place — Phase 1 model code should be league-parameterized from day one anyway.
+- **Hyperparameter sweep** (grid or Bayesian) for XGBoost: n_estimators, max_depth, learning_rate, subsample. Currently fixed at {400, 4, 0.05, 0.8}.
+- **Kelly sizing**: fractional Kelly on `edge = p_model - p_market`; per-bet cap at `max(0.02 * bankroll, kelly_fraction * 0.5)`; PROJECT_INSTRUCTIONS §10.
+- **Calibration revisit**: Platt scaling or beta calibration as an alternative to isotonic. Validate on holdout that CLV edge is preserved after calibration.
 
-**Recommendation: Option B.** Phase 1's open questions (CLV measurement plumbing, walk-forward backtest harness, isotonic calibration on edge-positive splits) all surface faster on EPL-only. A single league is enough sample. Multi-league adds breadth, not depth, and the modeling code wins more from validating-the-loop than from training-on-more-data. Add La Liga next, then prioritize the rest by liquidity (Bundesliga > Serie A > Ligue 1 on Betfair Exchange volume).
+### Medium-term: Phase 2 step 3 onward
 
-### Medium-term: Phase 1 (weeks 4–7 per PROJECT_INSTRUCTIONS §10)
+- Multi-market extension: 1X2 XGBoost (if DC is revived as a stacked input), Asian handicap.
+- LangGraph orchestration + Betfair Exchange Delayed key + paper-trading loop (Phase 3).
+- Real-money deployment gated on PROJECT_INSTRUCTIONS §3 bankroll discipline (Phase 4+).
 
-- Dixon-Coles 1X2 baseline (BLUE_MAP §7).
-- xG-Skellam goals-totals (BLUE_MAP §7).
-- Walk-forward backtest harness with per-bet CLV computation (BLUE_MAP §7.1, §8).
-- Isotonic calibration on holdout edges (BLUE_MAP §7).
-- Target: positive CLV vs Betfair SP on a 1000+ bet sample. (PROJECT_INSTRUCTIONS §10 Phase 1 success criterion.)
+### Parked / open questions
 
-This is where `teams` finally needs to be populated — Dixon-Coles needs per-team attack/defense parameters and we need a stable canonical key to attach them to. The `team_aliases.team_id` strings (`man_united`, `arsenal`, etc.) become the canonical `teams.team_id`.
-
-### Long-term
-
-- Phase 2: XGBoost ensemble + Kelly sizing (PROJECT_INSTRUCTIONS §10).
-- Phase 3: LangGraph orchestration + Betfair Delayed key + paper-trading loop (PROJECT_INSTRUCTIONS §10).
-- Phase 4: Real-money deployment, gated on bankroll discipline conditions in PROJECT_INSTRUCTIONS §3 (PROJECT_INSTRUCTIONS §10).
+- **Dixon-Coles 1X2**: sits dead (NO_GO verdict). Does it get revived as a XGBoost stacked feature in a later step? Or stay parked? No decision yet.
+- **Better calibration approach**: Platt? Beta calibration? Skip entirely until exchange pricing makes it necessary? Open.
+- **Multi-league extension**: La Liga, Serie A, Bundesliga, Ligue 1. Ingestion code is league-agnostic. Add when EPL XGBoost canonical run is stable. Priority: Bundesliga > Serie A > Ligue 1 on Betfair Exchange volume.
+- **Active position management / hedging engine**: flagged as Phase 5+ idea. Not in current plan.
 
 ---
 
 ## 5. Outstanding TODOs / known debt
 
-### Operator-side (no code change in this repo can fix)
-- **Persistent Windows PATH for `uv`.** Sessions need `$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"` prepended before `make.ps1` invocations. Persistent fix is a Windows User PATH config or a re-added fallback in `make.ps1`.
-- **Ambient `VIRTUAL_ENV` from a parent shell** pollutes every `uv run` with a "does not match the project environment path" warning. Cosmetic — outputs are correct.
+### Operator-side
+- **Ambient `VIRTUAL_ENV` warning** (`VIRTUAL_ENV=c:\MY_Projects\venv` does not match `.venv`): cosmetic, outputs correct. Fix: unset `VIRTUAL_ENV` in the parent shell or PowerShell profile.
+- **`uv` PATH**: sessions may need `$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"` prepended. Persistent fix is a Windows User PATH config.
 
 ### Code-side
 - **`.bootstrap_backup/` still tracked in git** from the original session. Safe to delete.
-- **No unit test for `_do_ingest_league` / `_do_ingest_understat_league` loop behavior.** The CLI's per-season loop with politeness sleep + 404 skip + idempotent re-load is not exercised by the unit suite. Test would mock `fetch_*` and assert correct loop control. Low priority.
-- **`teams` table empty.** `team_aliases.team_id` is the de-facto canonical until Phase 1 demands a properly-populated `teams` row per club (with `country`, `aliases` array, etc.). Land a small bootstrap seed (`scripts/seed_teams.sql`) when Phase 1 starts.
-- **Trailing-blank-line skip in `_read_rows_lenient`** causes the benign 1-reject in the 2014-15 football-data CSV. ~5-line cleanup.
-- **mypy `# type: ignore[misc]` scattered on `@decorator` lines** for typer/tenacity/pytest fixtures because pre-commit's mypy env doesn't have those packages. Cleaner fix: extend `.pre-commit-config.yaml` `additional_dependencies`.
-- **`tests/unit/test_football_data_frozen_header.py::test_registry_covers_frozen_header` xfail.** Encodes the deferred Cat-G/H bookmaker (1xBet, BMGM, BV, CL, BFD) deficit. Will need updating when those land in a future migration 004.
-- **Cat-G/H bookmakers**: revisit migration 004 once 2026-27 starts and these columns persist into a second season. Currently they appear only in 2024-25 (one season's worth). Wait one more season before promoting; otherwise risk promoting columns that disappear again.
-- **`addendum.md` at project root** contains an "Operator Vision Addendum" that hasn't been integrated into BLUE_MAP / PROJECT_INSTRUCTIONS. Operator's call whether to merge or leave as a separate file.
+- **Trailing-blank-line skip in `_read_rows_lenient`** causes 1-reject in the 2014-15 football-data CSV. ~5-line cleanup.
+- **mypy `# type: ignore[misc]`** on `@decorator` lines for typer/tenacity/pytest fixtures. Fix: extend `.pre-commit-config.yaml` `additional_dependencies`.
+- **Cat-G/H bookmakers** (1xBet, BMGM, BV, CL, BFD): deferred migration 008 until they appear in a second season. Currently only 2024-25. Wait one more season.
+- **`teams` table is empty.** `team_aliases.team_id` is de-facto canonical. Phase 2 step 2 will need team metadata if we add league/country filtering. Bootstrap seed deferred.
+- **`addendum.md`** at project root: "Operator Vision Addendum" not yet merged into BLUE_MAP / PROJECT_INSTRUCTIONS. Operator's call.
+- **Typer deprecation warning**: `is_flag=True` in `typer.Option()` for `--no-calibrate`. Cosmetic; tests pass with 1 warning. Fix in the next Typer upgrade.
+- **`LEARNING_LOG.md` does not exist.** Operator plans to create it. Sections 3 and 6 of this file are interim canon.
 
-### Documentation
-- **`LEARNING_LOG.md` does not yet exist.** Operator plans to create it; sections 3 and 6 of this handoff are interim canon until then. References to "Episode N" in code comments (notably `parse.py`'s `forecast_*_pct` field group docstring referencing Episode 11) point to entries that will live in `LEARNING_LOG.md` once written.
+### Test gaps
+- **`_do_ingest_league` / `_do_ingest_understat_league` CLI loop behavior** not unit-tested. Low priority.
+- **XGBoost integration test uses 180-day step** to bound wall-time; fold-level permutation audit therefore covers fewer folds than the canonical 7-day run. Acceptable.
 
 ---
 
-## 6. Recent decisions log (since last handoff)
+## 6. Recent decisions log (compressed)
 
-Brief 2–3 line summary of each non-trivial decision since the prior handoff (2026-04-26 archived). Episode numbers are aspirational — they map to entries in the planned `LEARNING_LOG.md`.
+Episodes 4–12 are from Phase 0 step 2 (Understat era). Compressed to one-liners here; full context is in the old HANDOFF.md (committed 2026-05-01).
 
-**Episode 4 — Migration 002 empty-string fix (2026-04-26).** Phase B audit gate falsely flagged 27 columns because `extras['KEY']=''` (loader's representation of empty CSV cells) was counted by `list_contains(map_keys(extras), 'KEY')`. Fixed by changing the audit's `extras_count` to `extras[KEY] IS NOT NULL AND extras[KEY] <> ''`. Empty strings now treated as no-data; genuine cast failures (e.g., `'not_a_number'`) still fire the gate. Inline fix per saved-memory rule on preserving original design intent. Commit `3a46a55`.
+**Ep 4** Migration 002 empty-string false-positive fix — `extras[KEY] <> ''` guard added.
+**Ep 5** Closing-odds coverage diagnostic — Pinnacle starts 2012-13, B365 starts 2019-20.
+**Ep 6** Plan-mode guard rails saved hours — Understat's HTML page no longer embeds inline JSON.
+**Ep 7** `team_aliases` temporal columns (`active_from`/`active_to`) added for rebrand future-proofing.
+**Ep 8** `kickoff_local` + `kickoff_utc` dual storage; TZ via `zoneinfo`.
+**Ep 9/10** Understat AJAX endpoint discovered from `understatapi` v0.7.1 source; HTML scraping dead.
+**Ep 11** `forecast_*_pct` is post-match attribution, not pre-match prediction — data leakage trap. Stored with warning docstring. Do NOT use as a feature.
+**Ep 12** Temporal-alias-join test uses two-raw-name-same-team variant (schema-compatible with `(source, raw_name)` PK).
 
-**Episode 5 — Closing-odds coverage diagnostic (2026-04-26).** One-shot notebook (`notebooks/001_closing_odds_coverage.py`) confirmed PSCH coverage starts 2012-13, B365CH starts 2019-20, and post-coverage gaps are confined to the in-progress 2025-26 season (matches not yet played). matplotlib not in deps; plot block is guarded.
+---
 
-**Episode 6 — Plan-mode guard rails for new ingestion source (2026-04-26).** Pre-implementation plan for Understat got two-stage critique (Stage 1: confirm wire shape; Stage 2: read upstream library source). Stage 1 confirmed that Understat's `/league/<L>/<YYYY>` page no longer embeds inline JSON — the original plan's regex assumption was structurally invalid. Stop-and-report rule activated; saved hours of failed regex hacking.
+**Episode 13 — Phase 1 diagnostic battery (2026-05-04/05).** Four diagnostic runs in sequence:
 
-**Episode 7 — `team_aliases` temporal columns (2026-04-26).** Added `active_from` / `active_to` to `team_aliases` to future-proof against mid-history rebrands. Bootstrap rows leave both NULL (interpreted as "valid forever"). PK stays `(source, raw_name)` — same-raw-name-reused-across-eras is unsupported by design; mid-history rebrands typically produce a NEW raw_name.
+1. `dc_v1` calibrated → **NO_GO**. Mean edge on winners: −0.0021. DC 1X2 model is dead.
+2. `xg_skellam_v1` calibrated → initial GO, but bootstrap CI crossed zero when scrutinised → downgraded to MARGINAL_SIGNAL.
+3. `dc_v1` no-calibrate → **NO_GO** (confirms isotonic wasn't the DC problem).
+4. `xg_skellam_v1` no-calibrate, `xi_decay=0.0` → **MARGINAL_SIGNAL, p=0.038**, all 7 seasons positive.
 
-**Episode 8 — `kickoff_local` + `kickoff_utc` dual storage (2026-04-26).** Understat publishes naive league-local datetimes (`"2024-08-11 19:00:00"`, no offset). Stored both `kickoff_local` (audit/debug only) and `kickoff_utc` (canonical for downstream queries). TZ conversion via stdlib `zoneinfo` (no `pytz` dep). `LEAGUE_TZ = {"EPL": "Europe/London"}`; other leagues land when ingest extends.
+Key learning: isotonic calibration consistently degrades CLV edge in both models. `xi_decay=0.0` (uniform weighting) outperforms decay in xG-Skellam. Locked config: `xi_decay=0.0, no_calibrate=True`.
 
-**Episode 9 — Understat inline-JSON deprecated (Stage 1 finding, 2026-04-26).** Captured `EPL_2023.html` and `EPL_2025.html` from the team-page URL pattern as a fallback. Both are 18,791-byte JS-rendered shells with zero match-level data — confirmed BOTH `/league/<L>/<YYYY>` AND `/team/<T>/<YYYY>` no longer embed `datesData` blobs. Old plan's Option B (team pages) was dead.
+---
 
-**Episode 10 — Understat AJAX endpoint discovered (Stage 2 finding, 2026-04-26).** Read `understatapi` v0.7.1 source on GitHub. Commit message `Fix: use AJAX endpoints instead of HTML parsing` (2025-12-17) confirmed the timeline of Understat's site change. Endpoint: `GET https://understat.com/getLeagueData/<LEAGUE>/<YEAR>` with required header `X-Requested-With: XMLHttpRequest`. No auth, no cookies. Returns clean JSON with `dates` / `teams` / `players` keys. We now hit this directly with httpx; understatapi as a dep is unnecessary.
+**Episode 14 — Bootstrap CI + MARGINAL_SIGNAL tier (2026-05-05).** Added `bootstrap_edge_ci` (percentile bootstrap, resampling `is_winner=TRUE` rows, 10 000 resamples, `p_value_above_zero = mean(resample_means <= 0)`). Added `MARGINAL_SIGNAL` verdict tier: `n_eval ≥ 2000 AND mean > 0 AND ci_low ≤ 0`. Verdict ladder (5 tiers):
 
-**Episode 11 — Forecast field is post-match attribution = pre-match leakage hazard (SUB-TASK 2a finding, 2026-04-26).** Empirical observation from the EPL_2025 fixture: `forecast.{w,d,l}` is populated on every played match (380/380 in 2023-24) but absent on all unplayed matches (0/42 in in-progress 2025-26). Implies it is a post-match attribution (computed from realized xG), not a pre-match prediction. **Using it as a pre-match feature is data leakage.** Stored for completeness via `forecast_*_pct` fields with explicit warning docstring on the field group in `parse.py`. (Operator plans to write the formal Episode 11 entry in `LEARNING_LOG.md`; the docstring already references it.)
+- `INSUFFICIENT_SAMPLE`: n_eval < 1000
+- `PRELIMINARY_SIGNAL`: 1000 ≤ n_eval < 2000
+- `NO_GO`: n_eval ≥ 2000 AND mean_edge_winners ≤ 0
+- `MARGINAL_SIGNAL`: n_eval ≥ 2000 AND mean > 0 AND ci_low ≤ 0
+- `GO`: n_eval ≥ 2000 AND mean > 0 AND ci_low > 0
 
-**Episode 12 (proposed) — Temporal-alias-join test wording divergence (TASK 3 closeout, 2026-05-01).** The Task 3 spec described "two alias rows for the SAME raw_name with non-overlapping `active_from`/`active_to`". Migration 003's PK `(source, raw_name)` makes this literal scenario impossible — a Task 1 design decision the operator approved at the time. The test in `tests/unit/test_understat_loader.py::test_understat_loader_temporal_alias_join` was implemented for the realistic schema-compatible variant: TWO alias rows with DIFFERENT raw_names mapping to the SAME `team_id`, with disjoint validity windows (the canonical mid-history rebrand case). Test asserts in-window resolves, out-of-window yields NULL `team_id`. Same intent, schema-compatible setup; documented in the test docstring. **Operator's call whether to formalize as Episode 12 in `LEARNING_LOG.md`.**
+xG-Skellam (xi_decay=0.0, no-calibrate) lands at MARGINAL_SIGNAL. Operator accepted this as operational green-light for Phase 2 given the season-level consistency.
+
+---
+
+**Episode 15 — XGBoost O/U 2.5 infrastructure (Phase 2 step 1, 2026-05-06).** Full feature engineering pipeline + model + audit gate:
+
+- `features/assembler.py`: 15 SQL features (8 xG-rolling/5-match + 6 results-rolling/10-match + 1 xg_skellam_p_over stacked feature). PIT mode: `ROWS BETWEEN N PRECEDING AND 1 PRECEDING` window functions. Snapshot mode: `ROW_NUMBER() … ORDER BY kickoff_utc DESC` + GROUP BY.
+- `features.md`: domain rationale written before training code invoked (per §10 Phase 2 requirement).
+- `models/xgboost_ou25.py`: `XGBoostOU25Fit` dataclass; fixed XGB params (n_estimators=400, max_depth=4, lr=0.05, subsample=0.8); `MIN_XGB_TRAIN_MATCHES=500`.
+- `eval/feature_audit.py`: null CI from permuting `audit_noise` 100 times; per-feature perm importance vs null CI; `below_null_baseline` flag.
+- `walkforward.py`: `needs_features=True` registry key; XGBoost path builds PIT train features → aligns labels via inner join → appends audit_noise (fold_idx seed) → fits → snapshot test features → perm audit → persist importances. Standard path (DC, xG-Skellam) unchanged.
+- `007_xgb_artifacts.sql`: `xgb_fits` (one row per fold fit) + `xgb_feature_importances` (16 rows per fit).
+- `make.ps1`: `$XgSkellamRunId` param → `--xg-skellam-run-id` CLI arg.
+- Test counts: 138 unit / 10 integration (all green).
 
 ---
 
 ## 7. How to resume
 
-1. **Read in this order** (small to large): `CLAUDE.md` (always-on context, ≤200 lines), this `HANDOFF.md`, then `LEARNING_LOG.md` once it exists. Skip `BLUE_MAP.md` / `PROJECT_INSTRUCTIONS.md` unless the task references them directly — they're large.
+1. **Read in this order** (small → large): `CLAUDE.md` (always-on), this `HANDOFF.md`, then `BLUE_MAP.md` §7.3–§7.4 (XGBoost fold stability + feature audit) if the task touches Phase 2. Skip the rest of BLUE_MAP unless a section is cited directly.
 
-2. **Confirm warehouse state** with three sanity queries (paste into a notebook or `uv run python -c "..."`):
-
-   ```sql
-   SELECT COUNT(*) FROM raw_match_results;       -- expect 9832
-   SELECT COUNT(*) FROM raw_understat_matches;   -- expect 4560
-   SELECT COUNT(*) FROM team_aliases;            -- expect 70
-   ```
-
-3. **Confirm test suite is green**:
+2. **Confirm test suite is green:**
    ```powershell
-   $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
-   .\make.ps1 test-all
-   # expect: 71 passed, 2 skipped, 1 xfailed
+   .\make.ps1 test
+   # expect: 138 passed, 1 xfailed
+   $env:FOOTY_EV_INTEGRATION_DB = "1"
+   .\make.ps1 test-integration
+   # expect: 10 passed, 2 skipped
    ```
 
-4. **Pick the next-step path** (per §4):
-   - If multi-league extension: extend `LEAGUE_TO_SOURCE` and `LEAGUE_TO_UNDERSTAT_CODE` maps, capture frozen fixtures per league, run ingests with politeness sleeps. ~half-day work per league.
-   - If Phase 1 baseline: start with `src/footy_ev/models/dixon_coles.py` and a walk-forward harness in `src/footy_ev/eval/walk_forward.py`. Reference BLUE_MAP §7. Begin by populating `teams` from `team_aliases` distinct `team_id`s.
+3. **Confirm warehouse state:**
+   ```sql
+   SELECT COUNT(*) FROM raw_match_results;       -- 9832 (EPL 2000-01 → 2025-26)
+   SELECT COUNT(*) FROM raw_understat_matches;   -- 4560 (EPL 2014-15 → 2025-26)
+   SELECT COUNT(*) FROM team_aliases;            -- 70
+   SELECT run_id, model_version, status, n_predictions
+   FROM backtest_runs ORDER BY started_at DESC LIMIT 5;
+   -- should show the locked xg_skellam run_id = 034bb631-83e8-4fdf-a7f5-1189bd107df6
+   ```
 
-5. **Note environment quirks** (operator-side, not code-fixable):
-   - `VIRTUAL_ENV` warning is cosmetic; ignore.
-   - `uv` may not be on PowerShell's default PATH; prepend `$env:USERPROFILE\.local\bin` first.
+4. **First move in the new chat:** Run the canonical XGBoost backtest (see §4 above). Operator pastes this HANDOFF.md + CLAUDE.md + PROJECT_INSTRUCTIONS.md + BLUE_MAP.md into the new session, says "Phase 2 step 1 landed, canonical XGBoost run pending — should I run it or do you want to inspect anything first?" Claude responds with the operator command from §4.
+
+5. **Environment quirks (operator-side, not code-fixable):**
+   - `VIRTUAL_ENV` mismatch warning is cosmetic; ignore.
+   - `uv` may not be on default PATH; prepend `$env:USERPROFILE\.local\bin` if needed.
 
 ---
 
@@ -188,15 +236,18 @@ Abbreviated banned-paths reminder (full detail in `PROJECT_INSTRUCTIONS.md` §5 
 
 - **No multi-account / "ghost execution" / human-mimicking bet sequencers.** Route volume through Betfair Exchange.
 - **No k-fold CV on time-series data.** Walk-forward only.
-- **No Pinnacle as a live odds API source.** Public access shut down July 2025. Historical CSV closing-odds data IS allowed (it's in static football-data files).
-- **No Transformer / DeepAR / RNN architectures for in-play in Phase 1.**
+- **No Pinnacle as a live odds API source.** Historical CSV closing-odds data IS allowed.
+- **No Transformer / DeepAR / RNN architectures for in-play in Phase 1 or 2.**
 - **No local 4–8B LLMs as the "Analyst" producing probability estimates.** They parse text; they do not predict.
 - **No paid services as if they're necessary.** The system must work end-to-end on free tooling.
-- **No real-money bet placement until the bankroll discipline conditions in `PROJECT_INSTRUCTIONS.md` §3 are met.** Default `LIVE_TRADING=false`.
-- **No mocking the database in integration tests.** Use a real (in-memory or temp-file) DuckDB.
-- **No fuzzy entity resolution at ingest time.** Raw names go in verbatim; resolution happens at query time via `team_aliases`.
-- **No f-string SQL with user/source-derived values.** Whitelisted column names from a registry are OK; everything else must be parameterized.
-- **No business logic in notebooks.** Notebooks are exploration; reusable code moves to `src/footy_ev/`.
-- **Don't trust `forecast_*_pct` as a pre-match feature.** It is post-match attribution. See Episode 11 in §6.
+- **No real-money bet placement until PROJECT_INSTRUCTIONS §3 bankroll conditions are met.**
+- **No mocking the database in integration tests.** Use real DuckDB.
+- **No fuzzy entity resolution at ingest time.** Raw names go in verbatim.
+- **No f-string SQL with user/source-derived values.**
+- **No business logic in notebooks.** Exploration only; reusable code moves to `src/footy_ev/`.
+- **Don't use `forecast_*_pct` as a pre-match feature.** It is post-match attribution (Episode 11).
+- **Don't re-enable isotonic calibration without a fresh diagnostic.** Isotonic consistently degraded CLV in all Phase 1 runs (Episode 13). `no_calibrate=True` is the production config.
+- **Don't run the XGBoost backtest without passing `--xg-skellam-run-id`.** The stacked feature will default to 0.5 for all fixtures and the model degrades silently.
+- **Don't trust audit_noise as a real feature.** It is a deliberate canary. `below_null_baseline=True` on audit_noise is the expected and correct outcome. If it appears ABOVE the null baseline, that is a bug signal.
 
-If a request seems to violate any of these, push back and cite this file or the upstream source.
+If a request violates any of these, push back and cite this file or the upstream source.

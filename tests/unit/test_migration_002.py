@@ -139,8 +139,7 @@ def _apply_migration_002(con: duckdb.DuckDBPyConnection) -> None:
 def test_registry_grew_by_52() -> None:
     """Catches accidental misses or duplicates when extending the registry."""
     assert len(REGISTRY) == _REGISTRY_COUNT_POST_002, (
-        f"expected {_REGISTRY_COUNT_POST_002} (= {_REGISTRY_COUNT_PRE_002}+52), "
-        f"got {len(REGISTRY)}"
+        f"expected {_REGISTRY_COUNT_POST_002} (= {_REGISTRY_COUNT_PRE_002}+52), got {len(REGISTRY)}"
     )
     # Every promoted source name is now in the registry.
     for name in _PROMOTED_SOURCE_NAMES:

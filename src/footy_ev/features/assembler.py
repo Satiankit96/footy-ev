@@ -226,7 +226,8 @@ rolling AS (
         + _SELECT_TAIL.format(fv=fv, join_h=join_h, join_a=join_a)
     )
     params = [as_of, as_of, xg_skellam_run_id, as_of, fixture_ids]
-    return con.execute(sql, params).pl()
+    out: pl.DataFrame = con.execute(sql, params).pl()
+    return out
 
 
 def _build_snapshot(
@@ -299,7 +300,8 @@ WHERE f.fixture_id = ANY(?)
         + select_snap
     )
     params = [as_of, as_of, xg_skellam_run_id, as_of, fixture_ids]
-    return con.execute(sql, params).pl()
+    out: pl.DataFrame = con.execute(sql, params).pl()
+    return out
 
 
 if __name__ == "__main__":

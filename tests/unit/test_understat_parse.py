@@ -96,9 +96,9 @@ def test_understat_frozen_fixture_in_progress_season() -> None:
         (m for m in unplayed if m.home_goals is None and m.home_xg is None),
         None,
     )
-    assert (
-        null_match is not None
-    ), "expected at least one unplayed match with goals=None AND xG=None"
+    assert null_match is not None, (
+        "expected at least one unplayed match with goals=None AND xG=None"
+    )
     assert null_match.away_goals is None
     assert null_match.away_xg is None
     # forecast key is absent on unplayed matches → all three pcts default to None

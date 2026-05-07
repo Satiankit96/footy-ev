@@ -165,9 +165,7 @@ def fetch_season(
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise UnderstatFetchError(
-            f"upstream returned non-JSON for {league} {season}: {e}"
-        ) from e
+        raise UnderstatFetchError(f"upstream returned non-JSON for {league} {season}: {e}") from e
 
     pretty = json.dumps(payload, sort_keys=True, indent=2).encode("utf-8")
     path.write_bytes(pretty)

@@ -121,3 +121,4 @@ For each of these, see `BLUE_MAP.md` §1 for the full mitigation:
 - If a request seems too vague to plan from, ask one targeted clarifying question.
 - If you've been working for a while and the context feels stale, suggest `/clear` and a fresh start with a focused prompt.
 - If the operator hits a rate limit, suggest they continue in Gemini 2.5 Pro web chat for the same task and paste results back when Pro resets.
+ b

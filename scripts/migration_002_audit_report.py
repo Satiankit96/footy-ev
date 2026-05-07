@@ -84,8 +84,7 @@ def main() -> None:
         rows: list[tuple[str, int, int, int]] = []
         for src in PROMOTED_SOURCE_NAMES:
             present = con.execute(
-                "SELECT COUNT(*) FROM raw_match_results "
-                "WHERE list_contains(map_keys(extras), ?)",
+                "SELECT COUNT(*) FROM raw_match_results WHERE list_contains(map_keys(extras), ?)",
                 [src],
             ).fetchone()[0]
             castable = con.execute(

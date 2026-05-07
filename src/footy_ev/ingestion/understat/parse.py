@@ -30,7 +30,7 @@ Module layout (per R6):
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Final
 from zoneinfo import ZoneInfo
 
@@ -130,16 +130,13 @@ def convert_kickoff(local_ts: datetime, league: str) -> datetime:
         ValueError: If ``league`` is not in ``LEAGUE_TZ``.
     """
     if local_ts.tzinfo is not None:
-        raise TypeError(
-            f"convert_kickoff: local_ts must be naive, got tzinfo={local_ts.tzinfo}"
-        )
+        raise TypeError(f"convert_kickoff: local_ts must be naive, got tzinfo={local_ts.tzinfo}")
     if league not in LEAGUE_TZ:
         raise ValueError(
-            f"convert_kickoff: league {league!r} not in LEAGUE_TZ; "
-            f"known: {sorted(LEAGUE_TZ)}"
+            f"convert_kickoff: league {league!r} not in LEAGUE_TZ; known: {sorted(LEAGUE_TZ)}"
         )
     aware_local = local_ts.replace(tzinfo=ZoneInfo(LEAGUE_TZ[league]))
-    return aware_local.astimezone(timezone.utc)
+    return aware_local.astimezone(UTC)
 
 
 def _flatten_match(raw: dict[str, Any], league: str) -> dict[str, Any]:
@@ -162,8 +159,7 @@ def _flatten_match(raw: dict[str, Any], league: str) -> dict[str, Any]:
     dt_str = raw.get("datetime")
     if not isinstance(dt_str, str):
         raise UnderstatParseError(
-            f"match {raw.get('id')!r}: 'datetime' must be a string, "
-            f"got {type(dt_str).__name__}"
+            f"match {raw.get('id')!r}: 'datetime' must be a string, got {type(dt_str).__name__}"
         )
     try:
         kickoff_local = datetime.strptime(dt_str, _KICKOFF_FORMAT)
@@ -232,8 +228,7 @@ def extract_matches(
     dates = payload.get("dates")
     if not isinstance(dates, list):
         raise UnderstatParseError(
-            f"payload['dates'] must be a list, got {type(dates).__name__} "
-            f"for {league} {season}"
+            f"payload['dates'] must be a list, got {type(dates).__name__} for {league} {season}"
         )
     if len(dates) < MIN_EXPECTED_MATCHES_PER_SEASON:
         raise UnderstatParseError(
@@ -243,10 +238,7 @@ def extract_matches(
             f"implementation before relaxing this floor."
         )
 
-    return [
-        UnderstatMatchRecord.model_validate(_flatten_match(m, league))
-        for m in dates
-    ]
+    return [UnderstatMatchRecord.model_validate(_flatten_match(m, league)) for m in dates]
 
 
 def parse_payload(
@@ -268,9 +260,7 @@ def parse_payload(
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as e:
-        raise UnderstatParseError(
-            f"JSON decode failed for {league} {season}: {e}"
-        ) from e
+        raise UnderstatParseError(f"JSON decode failed for {league} {season}: {e}") from e
     return extract_matches(payload, season=season, league=league)
 
 

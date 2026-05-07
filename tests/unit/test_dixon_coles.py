@@ -216,9 +216,9 @@ def test_fit_recovers_params_on_simulated():
     # Generous tolerance: small N, Poisson noise, simulator ignores the tau
     # structure (no rho in DGP).
     for t in teams:
-        assert (
-            abs(dc.team_attack[t] - true_attack[t]) < 0.40
-        ), f"alpha[{t}]={dc.team_attack[t]:.3f} vs true {true_attack[t]:.3f}"
+        assert abs(dc.team_attack[t] - true_attack[t]) < 0.40, (
+            f"alpha[{t}]={dc.team_attack[t]:.3f} vs true {true_attack[t]:.3f}"
+        )
     assert abs(dc.gamma_home_adv - true_gamma) < 0.30
     # Identifiability: alpha sum constrained to ~0
     assert abs(sum(dc.team_attack.values())) < 1e-6

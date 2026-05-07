@@ -4,7 +4,16 @@ param(
     [string]$Season,
     [string]$FromSeason,
     [string]$ToSeason,
-    [switch]$Refresh
+    [switch]$Refresh,
+    [int]$TrainMinSeasons = 3,
+    [int]$StepDays = 7,
+    [string]$ModelVersion = "dc_v1",
+    [double]$XiDecay = 0.0019,
+    [string]$XgSkellamRunId = "",
+    [string]$FeatureSubset = "",
+    [string]$RunId,
+    [string]$DevigMethod = "shin",
+    [switch]$NoCalibrate
 )
 switch ($Target) {
     "install"          { uv sync --all-groups; uv run playwright install chromium; uv run pre-commit install }
@@ -37,5 +46,49 @@ switch ($Target) {
         & uv @cliArgs
     }
     "ingest"           { uv run python -m footy_ev.ingestion.cli all }
-    default            { Write-Host "Targets: install, check-stack, test, test-integration, test-all, lint, format, typecheck, precommit, ingest-season, ingest-league, ingest" }
+    "backtest-epl" {
+        $lg = if ($League) { $League } else { "EPL" }
+        $cliArgs = @(
+            "run","python","-m","footy_ev.backtest.cli","backtest-walkforward",
+            "--league",$lg,
+            "--train-min-seasons",$TrainMinSeasons,
+            "--step-days",$StepDays,
+            "--model-version",$ModelVersion,
+            "--xi-decay",$XiDecay,
+            "--xg-skellam-run-id",$XgSkellamRunId,
+            "--feature-subset",$FeatureSubset
+        )
+        & uv @cliArgs
+    }
+    "diagnose-features" {
+        if (-not $RunId) {
+            Write-Error "Usage: .\make.ps1 diagnose-features -RunId <xgb-run-uuid>"
+            exit 1
+        }
+        & uv run python -m footy_ev.eval.cli diagnose-features --run-id $RunId
+    }
+    "diagnose-shap" {
+        if (-not $RunId) {
+            Write-Error "Usage: .\make.ps1 diagnose-shap -RunId <xgb-run-uuid>"
+            exit 1
+        }
+        & uv run python -m footy_ev.eval.cli diagnose-shap --run-id $RunId
+    }
+    "evaluate-run" {
+        if (-not $RunId) {
+            Write-Error "Usage: .\make.ps1 evaluate-run -RunId <uuid> [-DevigMethod shin|power]"
+            exit 1
+        }
+        $cliArgs = @(
+            "run","python","-m","footy_ev.eval.cli","evaluate-run",
+            "--run-id",$RunId,
+            "--devig-method",$DevigMethod
+        )
+        if ($NoCalibrate) { $cliArgs += "--no-calibrate" }
+        & uv @cliArgs
+    }
+    "dashboard" {
+        & uv run streamlit run dashboard/app.py
+    }
+    default            { Write-Host "Targets: install, check-stack, test, test-integration, test-all, lint, format, typecheck, precommit, ingest-season, ingest-league, ingest, backtest-epl, evaluate-run, diagnose-features, diagnose-shap, dashboard" }
 }
