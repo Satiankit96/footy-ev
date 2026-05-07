@@ -39,9 +39,7 @@ def test_understat_fetch_and_load_real_season(tmp_path: Path) -> None:
     try:
         apply_migrations(con)
         apply_views(con)
-        report = load_season(
-            league="EPL", season="2024-2025", json_path=json_path, con=con
-        )
+        report = load_season(league="EPL", season="2024-2025", json_path=json_path, con=con)
     finally:
         con.close()
 

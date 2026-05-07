@@ -50,12 +50,12 @@ def test_fetch_and_load_real_2024_2025_epl(tmp_path: Path) -> None:
     apply_migrations(con)
     try:
         first = load_season(league="EPL", season="2024-2025", csv_path=csv, con=con)
-        assert (
-            first.rejected == 0
-        ), f"expected zero rejected rows on real EPL data, got {first.rejected}"
-        assert (
-            first.inserted >= 300
-        ), f"EPL season has 380 matches; expected >=300 inserted, got {first.inserted}"
+        assert first.rejected == 0, (
+            f"expected zero rejected rows on real EPL data, got {first.rejected}"
+        )
+        assert first.inserted >= 300, (
+            f"EPL season has 380 matches; expected >=300 inserted, got {first.inserted}"
+        )
         assert first.total() == first.inserted
         assert first.updated == 0
         assert first.unchanged == 0

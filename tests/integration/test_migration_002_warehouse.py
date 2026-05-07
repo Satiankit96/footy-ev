@@ -98,8 +98,7 @@ def test_no_promoted_keys_remain_in_extras() -> None:
         leftovers: list[tuple[str, int]] = []
         for src in _PROMOTED_SOURCE_NAMES:
             count = con.execute(
-                "SELECT COUNT(*) FROM raw_match_results "
-                "WHERE list_contains(map_keys(extras), ?)",
+                "SELECT COUNT(*) FROM raw_match_results WHERE list_contains(map_keys(extras), ?)",
                 [src],
             ).fetchone()[0]
             if count > 0:
@@ -143,8 +142,7 @@ def test_pinnacle_closing_has_at_least_13_seasons() -> None:
             "SELECT COUNT(DISTINCT season) FROM raw_match_results WHERE psch IS NOT NULL"
         ).fetchone()[0]
         assert seasons >= 13, (
-            f"expected >=13 seasons with PSCH non-null (Pinnacle closing 2012-13+), "
-            f"got {seasons}"
+            f"expected >=13 seasons with PSCH non-null (Pinnacle closing 2012-13+), got {seasons}"
         )
     finally:
         con.close()
