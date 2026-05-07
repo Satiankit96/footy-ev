@@ -14,13 +14,21 @@ Or via make.ps1:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-import duckdb
-import polars as pl
-import streamlit as st
+# Streamlit runs this file as a script and puts only `dashboard/` on sys.path,
+# so `from dashboard import ...` would fail. Prepend the project root so the
+# package is importable regardless of how the script is invoked.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
-from dashboard import charts, queries
+import duckdb  # noqa: E402  -- import after sys.path tweak above
+import polars as pl  # noqa: E402
+import streamlit as st  # noqa: E402
+
+from dashboard import charts, queries  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config
