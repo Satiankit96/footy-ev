@@ -68,3 +68,29 @@ def test_no_business_logic_imported_inline():
     assert "from footy_ev.eval.cli import evaluate_run" in src
     # Sanity: keep the file lean
     assert len(src.splitlines()) <= 200, "run.py should stay thin (~100 lines)"
+
+
+def test_dashboard_path_is_absolute_and_relative_to_script(monkeypatch):
+    """`run.py dashboard` must launch with an absolute path so it works from
+    any cwd, and that path must be `<run.py dir>/dashboard/app.py`."""
+    mod = _load_run_module()
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd, *args, **kwargs):  # noqa: ANN001 - shim
+        captured["cmd"] = list(cmd)
+
+        class _R:
+            returncode = 0
+
+        return _R()
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    mod.dashboard()
+
+    cmd = captured["cmd"]
+    # ["uv", "run", "streamlit", "run", "<absolute>/dashboard/app.py"]
+    assert cmd[:4] == ["uv", "run", "streamlit", "run"]
+    resolved = Path(cmd[4])
+    assert resolved.is_absolute(), f"dashboard path must be absolute, got {resolved}"
+    assert resolved == (_RUN_PY.parent / "dashboard" / "app.py").resolve()

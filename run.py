@@ -112,11 +112,14 @@ def canonical(
     typer.echo("dashboard     : .\\make.ps1 dashboard  (or http://localhost:8501)")
 
 
+DASHBOARD_APP_PATH = (Path(__file__).resolve().parent / "dashboard" / "app.py").resolve()
+
+
 @app.command("dashboard")
 def dashboard() -> None:
     """Launch the Streamlit dashboard."""
     subprocess.run(
-        ["uv", "run", "streamlit", "run", "dashboard/app.py"],
+        ["uv", "run", "streamlit", "run", str(DASHBOARD_APP_PATH)],
         check=False,
     )
 

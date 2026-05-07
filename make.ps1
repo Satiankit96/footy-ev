@@ -90,5 +90,38 @@ switch ($Target) {
     "dashboard" {
         & uv run streamlit run dashboard/app.py
     }
-    default            { Write-Host "Targets: install, check-stack, test, test-integration, test-all, lint, format, typecheck, precommit, ingest-season, ingest-league, ingest, backtest-epl, evaluate-run, diagnose-features, diagnose-shap, dashboard" }
+    "push" {
+        # Authenticated `git push` using GITHUB_TOKEN from .env. The token is
+        # injected only into this single push invocation; it is NEVER written
+        # into .git/config (no `git remote set-url` with a token in the URL).
+        if (-not (Test-Path .env)) {
+            Write-Error "No .env file. Copy .env.example to .env and set GITHUB_TOKEN."
+            exit 1
+        }
+        $tokenLine = Select-String -Path .env -Pattern '^GITHUB_TOKEN=(.+)$' | Select-Object -First 1
+        if (-not $tokenLine) {
+            Write-Error "GITHUB_TOKEN= not set in .env. Generate a PAT at https://github.com/settings/tokens (repo scope) and paste it after the equals sign."
+            exit 1
+        }
+        $token = $tokenLine.Matches[0].Groups[1].Value.Trim()
+        if (-not $token) {
+            Write-Error "GITHUB_TOKEN is empty in .env. Paste your PAT after `GITHUB_TOKEN=`."
+            exit 1
+        }
+        $cleanUrl = git remote get-url origin
+        if (-not $cleanUrl) {
+            Write-Error "No git remote `origin` configured."
+            exit 1
+        }
+        if ($cleanUrl -match '@github\.com') {
+            Write-Error "origin URL has an embedded credential. Run `git remote set-url origin https://github.com/<user>/<repo>.git` first."
+            exit 1
+        }
+        $authedUrl = $cleanUrl -replace '^https://', "https://x-access-token:$token@"
+        $branch = git rev-parse --abbrev-ref HEAD
+        $remoteBranch = if ($branch -eq 'master') { 'main' } else { $branch }
+        Write-Host "Pushing $branch -> origin/$remoteBranch"
+        & git push $authedUrl "${branch}:${remoteBranch}"
+    }
+    default            { Write-Host "Targets: install, check-stack, test, test-integration, test-all, lint, format, typecheck, precommit, ingest-season, ingest-league, ingest, backtest-epl, evaluate-run, diagnose-features, diagnose-shap, dashboard, push" }
 }
