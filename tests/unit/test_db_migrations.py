@@ -11,10 +11,83 @@ def test_apply_migrations_creates_expected_tables() -> None:
     con = duckdb.connect(":memory:")
     applied = apply_migrations(con)
 
-    assert applied == ["001_raw_match_results.sql", "002_promote_closing_odds.sql"]
+    assert applied == [
+        "001_raw_match_results.sql",
+        "002_promote_closing_odds.sql",
+        "003_raw_understat_matches.sql",
+        "004_phase1_model_artifacts.sql",
+        "005_clv_calibration_artifacts.sql",
+        "006_eval_market_column_xg_artifacts.sql",
+        "007_xgb_artifacts.sql",
+        "008_bet_sizing_decisions.sql",
+    ]
 
     tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
-    assert {"raw_match_results", "teams", "schema_drift_log"}.issubset(tables)
+    assert {
+        "raw_match_results",
+        "teams",
+        "schema_drift_log",
+        "raw_understat_matches",
+        "team_aliases",
+        "model_predictions",
+        "dc_fits",
+        "dc_team_params",
+        "backtest_runs",
+        "clv_evaluations",
+        "calibration_fits",
+        "reliability_bins",
+        "xg_fits",
+        "xg_team_params",
+        "xgb_fits",
+        "xgb_feature_importances",
+        "bet_sizing_decisions",
+    }.issubset(tables)
+
+    # Migration 006: market column present in CLV / calibration / reliability tables.
+    cols_clv = {r[0] for r in con.execute("DESCRIBE clv_evaluations").fetchall()}
+    cols_cal = {r[0] for r in con.execute("DESCRIBE calibration_fits").fetchall()}
+    cols_rel = {r[0] for r in con.execute("DESCRIBE reliability_bins").fetchall()}
+    assert "market" in cols_clv
+    assert "market" in cols_cal
+    assert "market" in cols_rel
+
+
+def test_migration_003_raw_understat_matches_pk_enforced() -> None:
+    """raw_understat_matches PK on understat_match_id rejects duplicates."""
+    con = duckdb.connect(":memory:")
+    apply_migrations(con)
+
+    insert_sql = """
+        INSERT INTO raw_understat_matches (
+            league, season, source_code, source_url, ingested_at, source_row_hash,
+            understat_match_id, understat_home_id, understat_away_id,
+            home_team_raw, away_team_raw,
+            kickoff_local, kickoff_utc, is_result
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+    row = (
+        "EPL",
+        "2024-2025",
+        "understat",
+        "https://understat.com/league/EPL/2024",
+        "2026-04-26 00:00:00",
+        "h1",
+        "14048",
+        "89",
+        "82",
+        "Manchester United",
+        "Fulham",
+        "2024-08-16 20:00:00",
+        "2024-08-16 19:00:00",
+        True,
+    )
+    con.execute(insert_sql, row)
+
+    try:
+        con.execute(insert_sql, row)
+    except duckdb.ConstraintException:
+        return
+    raise AssertionError("expected ConstraintException on duplicate understat_match_id PK")
 
 
 def test_raw_match_results_primary_key_enforced() -> None:
