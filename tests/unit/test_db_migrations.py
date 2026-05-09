@@ -20,6 +20,7 @@ def test_apply_migrations_creates_expected_tables() -> None:
         "006_eval_market_column_xg_artifacts.sql",
         "007_xgb_artifacts.sql",
         "008_bet_sizing_decisions.sql",
+        "009_paper_trading.sql",
     ]
 
     tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
@@ -41,6 +42,10 @@ def test_apply_migrations_creates_expected_tables() -> None:
         "xgb_fits",
         "xgb_feature_importances",
         "bet_sizing_decisions",
+        "paper_bets",
+        "live_odds_snapshots",
+        "langgraph_checkpoint_summaries",
+        "circuit_breaker_log",
     }.issubset(tables)
 
     # Migration 006: market column present in CLV / calibration / reliability tables.
