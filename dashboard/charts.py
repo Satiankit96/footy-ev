@@ -287,3 +287,56 @@ def feature_stability_lines(df: pl.DataFrame) -> alt.Chart:
         title="Feature stability: permutation importance across folds (gray dashed = audit_noise)",
         height=350,
     )
+
+
+# ---------------------------------------------------------------------------
+# Paper Trading page (Phase 3 step 1)
+# ---------------------------------------------------------------------------
+
+
+def paper_edge_histogram(df: pl.DataFrame) -> alt.Chart:
+    """Histogram of edge_pct across the most recent N paper bets."""
+    if df.is_empty():
+        return alt.Chart(pl.DataFrame({"edge_pct": [0.0]}).to_pandas()).mark_text(
+            text="No paper bets yet."
+        )
+    return (
+        alt.Chart(df.to_pandas())
+        .mark_bar()
+        .encode(
+            x=alt.X("edge_pct:Q", bin=alt.Bin(maxbins=20), title="Edge %"),
+            y=alt.Y("count()", title="Paper bets"),
+            tooltip=["count()"],
+        )
+        .properties(title="Edge distribution (last paper bets)", height=220)
+    )
+
+
+def freshness_gauge(df: pl.DataFrame, limit_sec: int = 300) -> alt.Chart:
+    """Per-source freshness bars; red when over the staleness limit."""
+    if df.is_empty():
+        return alt.Chart(pl.DataFrame({"x": [0]}).to_pandas()).mark_text(
+            text="No live odds snapshots yet."
+        )
+    pdf = df.to_pandas()
+    pdf["status"] = pdf["max_staleness_sec"].apply(
+        lambda s: "stale" if s and s > limit_sec else "fresh"
+    )
+    return (
+        alt.Chart(pdf)
+        .mark_bar()
+        .encode(
+            x=alt.X("max_staleness_sec:Q", title=f"Staleness (s); limit={limit_sec}"),
+            y=alt.Y("fixture_id:N", title="Fixture"),
+            color=alt.Color(
+                "status:N",
+                scale=alt.Scale(
+                    domain=["fresh", "stale"],
+                    range=[VERDICT_COLORS["GO"], VERDICT_COLORS["NO_GO"]],
+                ),
+                legend=alt.Legend(title="Freshness"),
+            ),
+            tooltip=["venue", "fixture_id", "max_staleness_sec", "latest_received_at"],
+        )
+        .properties(title="Live-odds freshness per fixture", height=220)
+    )

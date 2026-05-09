@@ -162,7 +162,14 @@ def _sidebar() -> tuple[str, str | None]:
     st.sidebar.title("footy-ev")
     page = st.sidebar.radio(
         "Navigate",
-        ["Overview", "Run Detail", "CLV Explorer", "Feature Stability", "Kelly Sizing"],
+        [
+            "Overview",
+            "Run Detail",
+            "CLV Explorer",
+            "Feature Stability",
+            "Kelly Sizing",
+            "Paper Trading",
+        ],
     )
 
     run_id: str | None = None
@@ -620,6 +627,58 @@ def main() -> None:
             _page_kelly_sizing(run_id)
         else:
             st.info("Select a run from the sidebar.")
+    elif page == "Paper Trading":
+        _page_paper_trading()
+
+
+def _page_paper_trading() -> None:
+    """Phase 3 step 1: live paper-trading state."""
+    st.title("Paper Trading")
+
+    breaker = queries.circuit_breaker_status(get_con())
+    badge = "🔴 TRIPPED" if breaker["is_tripped"] else "🟢 OK"
+    cols = st.columns(4)
+    cols[0].metric("Circuit breaker", badge)
+    cols[1].metric("Total paper bets", queries.paper_bets_total(get_con()))
+
+    queue = queries.fixture_queue(get_con())
+    cols[2].metric("Fixtures in latest tick", int(queue.height))
+
+    last_event = breaker.get("last_event")
+    if last_event:
+        cols[3].caption(
+            f"Last breaker: {last_event.get('reason', '?')} "
+            f"({last_event.get('affected_source', '?')})"
+        )
+
+    st.divider()
+
+    st.subheader("Live odds freshness per fixture")
+    fresh = queries.freshness_per_source(get_con())
+    st.altair_chart(charts.freshness_gauge(fresh), use_container_width=True)
+
+    st.divider()
+
+    st.subheader("Recent paper bets")
+    recent = queries.paper_bets_recent(get_con(), limit=50)
+    if recent.is_empty():
+        st.info("No paper bets yet. Start the runtime: `python run.py paper-trade`.")
+    else:
+        st.dataframe(
+            recent.to_pandas(),
+            use_container_width=True,
+            column_config={
+                "edge_pct": st.column_config.NumberColumn("Edge", format="%.2f%%"),
+                "stake_gbp": st.column_config.NumberColumn("Stake", format="£%.2f"),
+                "odds_at_decision": st.column_config.NumberColumn("Odds", format="%.2f"),
+            },
+        )
+
+    st.divider()
+
+    st.subheader("Edge distribution (last 100 paper bets)")
+    dist = queries.edge_distribution_paper(get_con(), n=100)
+    st.altair_chart(charts.paper_edge_histogram(dist), use_container_width=True)
 
 
 if __name__ == "__main__":

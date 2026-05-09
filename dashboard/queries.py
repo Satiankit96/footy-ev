@@ -502,3 +502,110 @@ def feature_stability_df(con: duckdb.DuckDBPyConnection, run_id: str) -> pl.Data
         """,
         [started_at, completed_at],
     ).pl()
+
+
+# ---------------------------------------------------------------------------
+# Paper Trading page (Phase 3 step 1)
+# ---------------------------------------------------------------------------
+
+
+def paper_bets_recent(con: duckdb.DuckDBPyConnection, limit: int = 50) -> pl.DataFrame:
+    """Recent paper_bets rows for the live ticker."""
+    return con.execute(
+        """
+        SELECT decided_at, fixture_id, market, selection, odds_at_decision,
+               edge_pct, stake_gbp, settlement_status, p_calibrated, venue
+        FROM paper_bets
+        ORDER BY decided_at DESC LIMIT ?
+        """,
+        [limit],
+    ).pl()
+
+
+def paper_bets_total(con: duckdb.DuckDBPyConnection) -> int:
+    row = con.execute("SELECT COUNT(*) FROM paper_bets").fetchone()
+    return int(row[0]) if row else 0
+
+
+def freshness_per_source(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
+    """Latest staleness reading per (venue, fixture) from live_odds_snapshots."""
+    return con.execute(
+        """
+        SELECT venue, fixture_id,
+               MAX(received_at) AS latest_received_at,
+               MAX(staleness_seconds) AS max_staleness_sec
+        FROM live_odds_snapshots
+        GROUP BY venue, fixture_id
+        ORDER BY latest_received_at DESC NULLS LAST
+        LIMIT 20
+        """
+    ).pl()
+
+
+def circuit_breaker_status(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+    """Latest breaker state: is_tripped, last_event, recovered_at."""
+    row = con.execute(
+        """
+        SELECT event_id, tripped_at, reason, affected_source,
+               max_staleness_sec, auto_recovered, recovered_at
+        FROM circuit_breaker_log
+        ORDER BY tripped_at DESC LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return {"is_tripped": False, "last_event": None, "recovered_at": None}
+    is_tripped = not bool(row[5]) and row[6] is None
+    return {
+        "is_tripped": is_tripped,
+        "last_event": {
+            "event_id": row[0],
+            "tripped_at": row[1],
+            "reason": row[2],
+            "affected_source": row[3],
+            "max_staleness_sec": row[4],
+        },
+        "recovered_at": row[6],
+    }
+
+
+def edge_distribution_paper(con: duckdb.DuckDBPyConnection, n: int = 100) -> pl.DataFrame:
+    """Edge distribution of the most recent N paper bets."""
+    return con.execute(
+        """
+        SELECT edge_pct
+        FROM paper_bets
+        ORDER BY decided_at DESC LIMIT ?
+        """,
+        [n],
+    ).pl()
+
+
+def paper_pnl_vs_clv(con: duckdb.DuckDBPyConnection, lookback_days: int = 7) -> pl.DataFrame:
+    """Daily aggregate of settled paper_bets pnl and clv_pct."""
+    # `lookback_days` is operator-supplied int; coerce + interpolate via
+    # f-string (DuckDB INTERVAL wants a literal, not a parameter).
+    days = int(lookback_days)
+    return con.execute(
+        f"""
+        SELECT DATE_TRUNC('day', decided_at) AS day,
+               SUM(pnl_gbp) AS total_pnl_gbp,
+               AVG(clv_pct) AS avg_clv_pct,
+               COUNT(*) AS n_bets
+        FROM paper_bets
+        WHERE decided_at >= CURRENT_TIMESTAMP - INTERVAL '{days} days'
+          AND settlement_status <> 'pending'
+        GROUP BY 1
+        ORDER BY 1
+        """
+    ).pl()
+
+
+def fixture_queue(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
+    """Distinct fixtures from the most recent invocation."""
+    return con.execute(
+        """
+        SELECT UNNEST(fixture_ids) AS fixture_id, started_at
+        FROM langgraph_checkpoint_summaries
+        ORDER BY started_at DESC LIMIT 1
+        """
+    ).pl()
