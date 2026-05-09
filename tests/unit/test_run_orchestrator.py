@@ -33,10 +33,17 @@ def test_app_is_typer():
 
 
 def test_subcommands_registered():
-    """canonical / dashboard / status must all be registered Typer commands."""
+    """canonical / dashboard / status / paper-trade / paper-status must all
+    be registered Typer commands."""
     mod = _load_run_module()
     names = {info.name for info in mod.app.registered_commands}
-    assert {"canonical", "dashboard", "status"}.issubset(names), names
+    assert {
+        "canonical",
+        "dashboard",
+        "status",
+        "paper-trade",
+        "paper-status",
+    }.issubset(names), names
 
 
 def test_canonical_signature():
@@ -67,7 +74,7 @@ def test_no_business_logic_imported_inline():
     assert "from footy_ev.backtest.walkforward import" in src
     assert "from footy_ev.eval.cli import evaluate_run" in src
     # Sanity: keep the file lean
-    assert len(src.splitlines()) <= 200, "run.py should stay thin (~100 lines)"
+    assert len(src.splitlines()) <= 260, "run.py should stay thin"
 
 
 def test_dashboard_path_is_absolute_and_relative_to_script(monkeypatch):

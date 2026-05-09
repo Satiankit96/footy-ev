@@ -90,6 +90,12 @@ switch ($Target) {
     "dashboard" {
         & uv run streamlit run dashboard/app.py
     }
+    "paper-trade" {
+        & uv run python run.py paper-trade
+    }
+    "paper-status" {
+        & uv run python run.py paper-status
+    }
     "push" {
         # Authenticated `git push` using GITHUB_TOKEN from .env. The token is
         # injected only into this single push invocation; it is NEVER written
@@ -123,5 +129,5 @@ switch ($Target) {
         Write-Host "Pushing $branch -> origin/$remoteBranch"
         & git push $authedUrl "${branch}:${remoteBranch}"
     }
-    default            { Write-Host "Targets: install, check-stack, test, test-integration, test-all, lint, format, typecheck, precommit, ingest-season, ingest-league, ingest, backtest-epl, evaluate-run, diagnose-features, diagnose-shap, dashboard, push" }
+    default            { Write-Host "Targets: install, check-stack, test, test-integration, test-all, lint, format, typecheck, precommit, ingest-season, ingest-league, ingest, backtest-epl, evaluate-run, diagnose-features, diagnose-shap, dashboard, paper-trade, paper-status, push" }
 }

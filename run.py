@@ -115,6 +115,92 @@ def canonical(
 DASHBOARD_APP_PATH = (Path(__file__).resolve().parent / "dashboard" / "app.py").resolve()
 
 
+@app.command("paper-trade")  # type: ignore[misc]
+def paper_trade(
+    fixtures_ahead_days: int = typer.Option(7, "--fixtures-ahead-days"),
+    bankroll: float = typer.Option(1000.0, "--bankroll"),
+    edge_threshold: float = typer.Option(0.03, "--edge-threshold"),
+    once: bool = typer.Option(False, "--once", help="Single-pass test (no loop)."),
+    db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
+) -> None:
+    """Start the paper-trading runtime (foreground; Ctrl-C to stop)."""
+    from footy_ev.runtime import PaperTraderConfig, run_forever, run_once
+
+    cfg = PaperTraderConfig(
+        fixtures_ahead_days=fixtures_ahead_days,
+        bankroll_gbp=bankroll,
+        edge_threshold_pct=edge_threshold,
+        db_path=db_path,
+    )
+    if once:
+        out = run_once(cfg)
+        typer.echo(
+            "paper-trade --once: "
+            f"invocation={out['invocation_id']} "
+            f"fixtures={out['n_fixtures']} "
+            f"candidates={out['n_candidates']} "
+            f"approved={out['n_approved']} "
+            f"breaker={out['breaker_tripped']}"
+        )
+        if out["last_error"]:
+            typer.echo(f"last_error: {out['last_error']}")
+        return
+    typer.echo(
+        f"paper-trade: polling every {cfg.tick_seconds}s, "
+        f"fixtures-ahead-days={cfg.fixtures_ahead_days}, "
+        f"bankroll={cfg.bankroll_gbp} GBP, "
+        f"edge-threshold={cfg.edge_threshold_pct:.1%}. Ctrl-C to stop."
+    )
+    run_forever(cfg)
+
+
+@app.command("paper-status")  # type: ignore[misc]
+def paper_status(
+    db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
+) -> None:
+    """Print latest paper-trading invocation, recent bets, breaker state."""
+    con = _open_db(db_path)
+    inv = con.execute(
+        """
+        SELECT invocation_id, started_at, completed_at, final_node,
+               n_candidate_bets, n_approved_bets, breaker_tripped, breaker_reason
+        FROM langgraph_checkpoint_summaries
+        ORDER BY started_at DESC LIMIT 1
+        """
+    ).fetchone()
+    if inv is None:
+        typer.echo("no paper-trading invocations yet.")
+    else:
+        (inv_id, started, completed, final_node, n_c, n_a, breaker, reason) = inv
+        typer.echo(f"latest_invocation = {inv_id}")
+        typer.echo(f"started_at        = {started}")
+        typer.echo(f"completed_at      = {completed}")
+        typer.echo(f"final_node        = {final_node}")
+        typer.echo(f"n_candidates      = {n_c}")
+        typer.echo(f"n_approved        = {n_a}")
+        typer.echo(f"breaker_tripped   = {breaker}")
+        if breaker:
+            typer.echo(f"breaker_reason    = {reason}")
+
+    n_paper = con.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0]
+    typer.echo(f"total_paper_bets  = {n_paper}")
+
+    last_bets = con.execute(
+        """
+        SELECT decided_at, fixture_id, market, selection, odds_at_decision,
+               edge_pct, stake_gbp
+        FROM paper_bets
+        ORDER BY decided_at DESC LIMIT 5
+        """
+    ).fetchall()
+    if last_bets:
+        typer.echo("recent paper bets:")
+        for r in last_bets:
+            typer.echo(
+                f"  {r[0]}  {r[1]}  {r[2]}/{r[3]}  odds={r[4]:.2f} edge={r[5]:+.2%} stake=GBP{r[6]}"
+            )
+
+
 @app.command("dashboard")
 def dashboard() -> None:
     """Launch the Streamlit dashboard."""

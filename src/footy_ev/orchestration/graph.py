@@ -11,6 +11,7 @@ deferred to Phase 3 step 2.
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -72,10 +73,16 @@ def compile_graph(
     g: Any,
     *,
     checkpoint_path: Path = DEFAULT_CHECKPOINT_PATH,
-) -> tuple[Any, SqliteSaver]:
-    """Compile with a SqliteSaver bound to the given file."""
+) -> tuple[Any, sqlite3.Connection]:
+    """Compile with a SqliteSaver bound to the given file.
+
+    Returns (compiled_graph, sqlite_conn). The caller owns the sqlite
+    connection's lifetime and must close it after the graph invocation
+    completes (we deliberately do not use the from_conn_string context
+    manager because we need the connection to outlive that scope).
+    """
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    saver_cm = SqliteSaver.from_conn_string(str(checkpoint_path))
-    saver = saver_cm.__enter__()  # caller is expected to close via saver_cm
+    conn = sqlite3.connect(str(checkpoint_path), check_same_thread=False)
+    saver = SqliteSaver(conn)
     compiled = g.compile(checkpointer=saver)
-    return compiled, saver
+    return compiled, conn
