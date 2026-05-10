@@ -1,223 +1,202 @@
-# Handoff — end of Phase 3 step 1 (LangGraph + Betfair Delayed + paper trader)
+# Handoff — end of Phase 3 step 3 (Betfair→warehouse fixture alignment)
 
-> Created **2026-05-09** at the close of Phase 3 step 1. Read this in full
+> Created **2026-05-10** at the close of Phase 3 step 3. Read this in full
 > before doing anything else, then `CLAUDE.md`, then `BLUE_MAP.md` only
-> for the section a new task touches. Phase 0–2 history was covered by
-> the previous handoff (committed 2026-05-06); compressed to one-liners
-> in §6.
+> for the section a new task touches. Phase 0–2 history is in the prior
+> handoffs; Phase 3 step 1 is in the previous HANDOFF.md (committed
+> 2026-05-09, last preserved in git history).
 
 ---
 
 ## 1. Status banner
 
-We are at the **end of Phase 3 step 1**. The paper-trading vertical
-slice ships intact:
+We are at the **end of Phase 3 step 3**. The paper-trading vertical
+slice now has full fixture alignment:
 
-- Betfair Exchange Delayed-API client (free-tier, 60s lag) with auth +
-  three calls + per-response staleness timestamp.
-- LangGraph StateGraph with six nodes (scraper / news / analyst /
-  pricing / risk / execution), checkpointed to a SQLite file separate
-  from the warehouse.
-- Paper-trader runtime exposing `python run.py paper-trade [--once]`
-  and `python run.py paper-status`.
-- DuckDB migration 009 with paper_bets / live_odds_snapshots /
-  langgraph_checkpoint_summaries / circuit_breaker_log.
-- Streamlit dashboard "Paper Trading" page with breaker status, fixture
-  queue, freshness gauge, recent bets table, edge histogram.
+- **Phase 3 step 2 (complete):** Production XGBoost model wired into the
+  analyst node. `model_loader.py` detects the latest completed
+  `xgb_ou25_v1` run, deserialises the booster from `xgb_fits`, and
+  returns a `score_fn` closure. `run.py paper-trade` accepts
+  `--model-run-id` (also `PAPER_TRADER_MODEL_RUN_ID` env).
 
-**Test suite: 239 unit passed, 1 xfailed (pre-existing migration-002
-frozen-header xfail).** Integration: 5 passed, 9 skipped (all
-opt-in: Betfair live + warehouse-population + network gates).
+- **Phase 3 step 3 (complete):** Betfair-to-warehouse fixture alignment.
+  Migration 010 adds `betfair_team_aliases`, `betfair_market_aliases`
+  (seeded), `betfair_selection_aliases` (seeded), and
+  `betfair_event_resolutions`. At runtime, `scraper_node` resolves each
+  Betfair event to a warehouse `fixture_id` via a deterministic SQL join;
+  unresolved events are dropped; >50% failure trips the circuit breaker.
+  Bootstrap script (`scripts/bootstrap_betfair_aliases.py`) populates
+  `betfair_team_aliases` via rapidfuzz + interactive review.
 
-The runtime has **not** been exercised against the real Betfair API yet
-— that's pending the operator filling in BETFAIR_APP_KEY /
-BETFAIR_USERNAME / BETFAIR_PASSWORD. See `docs/SETUP_GUIDE.md` for the
-walkthrough.
+**Test suite: 273 unit passed, 1 xfailed (pre-existing migration-002
+frozen-header xfail).** Integration test for resolution is gated on
+`FOOTY_EV_INTEGRATION_DB=1`.
 
 ---
 
-## 2. Key file locations (Phase 3)
+## 2. Key file locations (Phase 3 additions)
 
 | Path | Purpose |
 |---|---|
-| `src/footy_ev/venues/betfair.py` | Delayed-API client; login + listEvents/listMarketCatalogue/listMarketBook; tenacity retries; BetfairResponse(payload, received_at, source_timestamp, staleness_seconds) |
-| `src/footy_ev/venues/exceptions.py` | BetfairAuthError, StaleResponseError |
-| `src/footy_ev/orchestration/state.py` | BettingState TypedDict + pydantic OddsSnapshot/ModelProbability/BetDecision |
-| `src/footy_ev/orchestration/graph.py` | `build_graph(...)` + `compile_graph(...)` (SqliteSaver-backed checkpoints) |
-| `src/footy_ev/orchestration/checkpoints.py` | Summary writer for langgraph_checkpoint_summaries + circuit_breaker_log |
-| `src/footy_ev/orchestration/nodes/*.py` | Six nodes; analyst takes a `score_fn` injected by the runtime |
-| `src/footy_ev/runtime/paper_trader.py` | `run_once(cfg, ...)` + `run_forever(cfg)` + `_resolve_fixtures_and_markets` |
-| `src/footy_ev/db/migrations/009_paper_trading.sql` | Four append-only tables for the paper runtime |
-| `dashboard/app.py` | "Paper Trading" sidebar page added |
-| `docs/SETUP_GUIDE.md` | Operator walkthrough: Betfair account + Delayed key + .env |
-| `data/langgraph_checkpoints.sqlite` | (created on first run) SqliteSaver blob store, separate from the warehouse |
+| `src/footy_ev/db/migrations/010_betfair_entity_resolution.sql` | betfair_team_aliases, betfair_market_aliases (seeded), betfair_selection_aliases (seeded), betfair_event_resolutions |
+| `src/footy_ev/venues/resolution.py` | resolve_event, resolve_market, resolve_selection, cache_resolution, parse_betfair_event_name, resolve_event_from_meta |
+| `src/footy_ev/venues/betfair.py` | Delayed-API client |
+| `src/footy_ev/orchestration/state.py` | BettingState — `resolved_fixture_ids` added in step 3 |
+| `src/footy_ev/orchestration/nodes/scraper.py` | Resolves each Betfair event; drops unresolved; trips breaker >50% |
+| `src/footy_ev/orchestration/nodes/analyst.py` | Uses `resolved_fixture_ids` over `fixtures_to_process` |
+| `src/footy_ev/orchestration/graph.py` | Threads `event_meta_map` + `warehouse_con` to scraper |
+| `src/footy_ev/runtime/paper_trader.py` | `_resolve_fixtures_and_markets` returns 3-tuple with event_meta_map |
+| `src/footy_ev/runtime/model_loader.py` | detect_production_run_id, load_production_scorer, _BOOSTER_CACHE |
+| `src/footy_ev/runtime/__init__.py` | Exports NoProductionModelError, detect_production_run_id, load_production_scorer |
+| `scripts/bootstrap_betfair_aliases.py` | One-off: rapidfuzz fuzzy match + interactive review → betfair_team_aliases |
+| `dashboard/app.py` | Entity Resolution panel + Production Model panel added |
+| `dashboard/queries.py` | entity_resolution_summary, entity_resolution_unresolved_events, production_model_info |
+| `tests/unit/test_resolution.py` | 18 unit tests for resolution.py |
+| `tests/unit/test_scraper_with_resolution.py` | 5 tests: backward compat + resolution scenarios |
+| `tests/integration/test_paper_trade_emits_bet_with_resolution.py` | Full-stack integration (FOOTY_EV_INTEGRATION_DB=1) |
 
 ---
 
-## 3. Architectural invariants (Phase 3 additions to the existing 16)
+## 3. Architectural invariants (Phase 3 step 2–3 additions)
 
-17. **No real-money Betfair execution in step 1.** The execution node
-    has zero placeBets call wired up. LIVE_TRADING=true is checked but
-    the path lands in paper_bets either way, with a logged warning.
-    Real execution is a Phase 4 deliverable.
-18. **Idempotency on every external call.** `paper_bets.decision_id`
-    is `hash(fixture_id|market|selection|decided_at|venue)[:24]`;
-    `live_odds_snapshots.snapshot_id` will use the same pattern when
-    the snapshot writer is wired in step 2. Re-running the same
-    invocation produces the same row, never a duplicate.
-19. **Staleness > 300s trips the circuit breaker.** Threshold lives in
-    `orchestration/nodes/scraper.py::STALENESS_LIMIT_SEC`. Every trip
-    is logged to circuit_breaker_log with `reason` and
-    `affected_source`.
-20. **Credentials never in code, never in logs.** All three BETFAIR_*
-    vars come from `.env` (gitignored). The Betfair client redacts
-    its auth-error messages so credentials never appear in retry
-    backtraces or pre-commit hook output.
-21. **SQLite checkpoints are isolated from the analytical warehouse.**
-    Binary checkpoint blobs live in
-    `data/langgraph_checkpoints.sqlite`; queryable summaries live in
-    `langgraph_checkpoint_summaries` in DuckDB. The dashboard never
-    cracks open the SQLite file.
-22. **Analyst node is pure.** It accepts a `score_fn` injected by the
-    runtime, never re-trains, and never opens its own DuckDB
-    connection. Tests pass a closure; runtime does likewise.
-23. **Cyclical re-runs deferred.** BLUE_MAP §2.4 (news → analyst
-    re-run on lineup deltas) is Phase 3 step 2, not step 1.
+24. **Runtime resolution is deterministic SQL only.** `resolve_event`
+    does a `betfair_team_aliases` join followed by a `v_fixtures_epl`
+    date-level match. Fuzzy matching runs only in
+    `scripts/bootstrap_betfair_aliases.py` with manual review. Never
+    call rapidfuzz at runtime.
+25. **`betfair_team_aliases` must be populated before paper-trade
+    produces bets.** An empty table means 100% unresolved → breaker
+    trips. Run `python scripts/bootstrap_betfair_aliases.py` once after
+    setting up Betfair credentials.
+26. **Kickoff alignment is DATE-level.** `v_fixtures_epl.kickoff_utc` is
+    midnight UTC; Betfair `openDate` is a datetime. The SQL join uses
+    `CAST(... AS DATE)` equality, not timestamp arithmetic. This prevents
+    off-by-one errors around midnight and doesn't require a ±N hour
+    window.
+27. **`resolved_fixture_ids` is the analyst's preferred input.** When the
+    scraper populates it (resolution enabled), the analyst uses those
+    warehouse IDs; when it's empty (legacy / no con), it falls back to
+    `fixtures_to_process` (Betfair event IDs). This preserves backward
+    compat for tests that don't wire a DB connection.
+28. **Model loading uses a time-window join.** `xgb_fits` has no FK to
+    `backtest_runs`. The loader finds fits via
+    `fitted_at BETWEEN backtest_runs.started_at AND completed_at`.
+    `_BOOSTER_CACHE` is a module-level dict keyed by `run_id`;
+    `clear_booster_cache()` is exported for test isolation.
+29. **`audit_noise` column is 0.0 at inference.** The training-time
+    canary feature is always zeroed when calling `booster.predict()` in
+    `load_production_scorer`. The feature list must still contain the
+    column name.
 
 ---
 
 ## 4. What's next, ordered
 
-### Immediate
+### Immediate (operator prerequisites)
 
-1. **Operator: register a Betfair account** (free, no deposit) and
-   request a Delayed Application Key. See `docs/SETUP_GUIDE.md` §1–§3.
-   Populate the three `BETFAIR_*` vars in `.env`.
-2. **Operator: run the live integration test:**
+1. **Operator: run `scripts/bootstrap_betfair_aliases.py`** once real
+   Betfair credentials are in `.env`. This populates
+   `betfair_team_aliases` so the scraper can resolve events.
    ```powershell
-   $env:FOOTY_EV_BETFAIR_LIVE = "1"
-   .\make.ps1 test-integration
+   python scripts/bootstrap_betfair_aliases.py --db data/warehouse/footy_ev.duckdb
    ```
-   Pass = creds work and the Delayed API is up.
-3. **Operator: smoke-run the paper trader once:**
+   Review each candidate (y/n/m). Auto-accepts score ≥ 85.
+2. **Operator: run the integration test** (optional, requires credentials
+   + data):
+   ```powershell
+   $env:FOOTY_EV_INTEGRATION_DB = "1"
+   python -m pytest tests/integration/test_paper_trade_emits_bet_with_resolution.py -v
+   ```
+3. **Operator: smoke-run paper-trade:**
    ```powershell
    python run.py paper-trade --once
    ```
-   Expect either zero candidates (likely — the score_fn is not yet
-   wired to the real model) or one of two diagnostic states. Open the
-   Streamlit "Paper Trading" page to see breaker status + fixture
-   queue.
+   Check the Streamlit "Paper Trading" page → Entity Resolution panel
+   should show resolved events. If all show unresolved, the alias table
+   needs bootstrap.
 
-### Short-term: Phase 3 step 2
+### Short-term: Phase 3 step 4
 
-- **Wire a real `score_fn` for the analyst node.** Currently
-  `runtime.paper_trader.run_once` accepts `score_fn=None` and the
-  graph emits zero probabilities — bets are only produced when tests
-  inject a closure. Step 2 needs a `score_fn` that:
-    1. Loads the latest XGBoost run's fits keyed by run_id.
-    2. Builds a snapshot feature row via `features.assembler`.
-    3. Calls `predict_ou25` and emits the dict shape the analyst
-       expects.
-- **Wire `live_odds_snapshots` writes** in the scraper node so the
-  freshness chart on the dashboard has real data.
+- **`live_odds_snapshots` writes.** Migration 009 created the table,
+  dashboard query reads it, but the scraper node does not write to it
+  yet. Wire up snapshot persistence so the freshness chart has real data.
 - **Cyclical re-run on news deltas** (BLUE_MAP §2.4): real Ollama
   integration in `nodes/news.py`, plus a conditional edge analyst →
-  pricing | analyst (re-run if news_deltas non-empty and re-runs <
-  N).
-- **Settlement backfill job:** when fixtures complete, look up the
-  Betfair SP and write `settled_at`, `pnl_gbp`, `closing_odds`, and
-  `clv_pct` to the existing paper_bets rows.
-- **Fixture-id alignment:** today the runtime's "fixture_id" is the
-  Betfair eventId, which doesn't join against the historical fixture
-  namespace. Step 2 should establish the mapping (probably via a
-  `betfair_event_id_aliases` table) and join through `v_fixtures`.
+  pricing | analyst.
+- **Settlement backfill job:** when fixtures complete, back-fill
+  `settled_at`, `pnl_gbp`, `closing_odds`, `clv_pct` on paper_bets rows.
+- **`run_forever` test:** add a test with a fake sleep + kill-switch;
+  currently only `run_once` is tested end-to-end.
 
 ### Medium-term
 
-- **Phase 4 prerequisites:** real-money execution path. Has to wait
-  on `PROJECT_INSTRUCTIONS §3` bankroll discipline conditions
-  (positive CLV on 500+ paper bets, 60-day paper run, chaos-tested
-  bankroll module).
-- **Multi-market extension:** 1X2 and BTTS in addition to OU 2.5.
-  Scraper today only encodes OU 2.5; the selection map needs market-
-  specific lookups.
+- **Phase 4 prerequisites:** real-money execution path. Gated on
+  positive CLV over 500+ paper bets + 60-day paper run + chaos-tested
+  bankroll module (PROJECT_INSTRUCTIONS §3).
+- **Multi-market extension:** 1X2 and BTTS. Scraper today only fetches
+  OVER_UNDER_25 markets; extend `market_types` list and add per-market
+  score_fn dispatch.
+- **Ambiguous fixture resolution.** When two fixtures share the same
+  teams and date (data artifact), `resolve_event` returns "ambiguous"
+  and drops the event. Consider a tiebreak heuristic (league priority).
 
 ---
 
 ## 5. Outstanding TODOs / known debt
 
 ### Operator-side
-- Rotate the GitHub PAT exposed during the 2026-05-09 push setup;
-  `make.ps1 push` now reads it from `.env` cleanly. The old token is
-  still stored in GitHub's PAT list — revoke it.
+- Rotate the GitHub PAT exposed during the 2026-05-09 push setup (see
+  step 1 handoff). `make.ps1 push` now reads it from `.env` cleanly.
 - `VIRTUAL_ENV` mismatch warning persists; cosmetic.
 
 ### Code-side
-- **`live_odds_snapshots` is unwritten.** Migration 009 created the
-  table, the dashboard query reads it, but the scraper node does not
-  yet write to it. Step 2 fix.
-- **Analyst node has no real `score_fn`.** Runtime constructs the
-  graph with `score_fn=None`, so bets are never produced in
-  production until step 2 plumbs in the model loader.
-- **Betfair "fixture_id" is the Betfair eventId**, not the
-  v_fixtures.fixture_id used by Phase 1/2. Cross-system join is not
-  yet wired.
-- **Staleness lookup is per-call, not per-snapshot.** When a market
-  has stale source data, the breaker trips, but individual snapshots
-  store `staleness_seconds=0` because we attribute staleness at the
-  response level not the runner level. Acceptable for step 1.
-- **`risk._hit_per_bet_cap` is a heuristic** (compares f_used to the
-  default 0.02 cap). When the operator passes a non-default
-  per_bet_cap_pct, the flag will be wrong. Low priority — only the
-  audit column is affected.
+- **`live_odds_snapshots` unwritten.** See §4 Short-term.
+- **`run_forever` not tested.** Only `run_once` has end-to-end coverage.
+- **`risk._hit_per_bet_cap` is a heuristic.** When the operator passes a
+  non-default `per_bet_cap_pct`, the audit flag will be wrong.
+- **Betfair `resolved_by` column defaults to `'manual'` in migration.**
+  The bootstrap script should write `'fuzzy_accepted'` or
+  `'fuzzy_reviewed'` depending on the path taken. Currently all rows
+  written via the script will still have the default `'manual'`; this is
+  cosmetic but worth fixing when the script is next touched.
 
 ### Test gaps
-- No test exercises `run_forever` (the polling loop). Step 2 should
-  add one with a fake sleep and a kill-switch.
-- The live Betfair test stays skipped in CI by default. Once a
-  Betfair account is set up, the operator should add `--betfair-live`
-  to a separate make target so it runs on demand without polluting
-  the unit suite.
+- No `run_forever` test.
+- Live Betfair test stays skipped in CI. Add a `make.ps1 test-betfair`
+  target once credentials are in place.
+- `test_paper_trade_emits_bet_with_resolution.py` is opt-in (env gate).
+  Consider promoting to a nightly CI target once the warehouse is seeded.
 
 ---
 
-## 6. Recent decisions log (compressed)
+## 6. Recent decisions log
 
-Phase 0/1/2 episodes are in the prior handoff (committed 2026-05-06).
-The Phase 3 step 1 episodes:
+Phase 0–2 and Phase 3 step 1 episodes are in prior handoffs.
 
-**Ep 16 — Plan-then-implement protocol (2026-05-09).** Operator demanded
-plan-mode for Phase 3 step 1, approved the plan as-is, then approved a
-straight-through 8-commit implementation. Rule for future big-scope
-steps: produce a plan with file list, test plan, migration schema, and
-runbook before any commits.
+**Ep 21 — Phase 3 step 2: production model in analyst node (2026-05-10).**
+`model_loader.py` uses a time-window join (no FK from `xgb_fits` to
+`backtest_runs`) to find the latest booster. `audit_noise` zeroed at
+inference. `_BOOSTER_CACHE` dict avoids repeated DuckDB queries.
+`NoProductionModelError` surfaces cleanly when no completed run exists.
+Test: `test_model_loader.py` (11 tests) + `test_paper_trader_once.py`
+updated. Namespace-mismatch workaround (score_fn returning `[]` silently)
+removed in step 3.
 
-**Ep 17 — SqliteSaver lifetime bug (2026-05-09).** First implementation
-of `compile_graph` called `SqliteSaver.from_conn_string(...).__enter__()`
-without ever pairing it with `__exit__()`, which closes the underlying
-sqlite3 connection on context exit. The graph then crashed on first
-invoke with "Cannot operate on a closed database." Fixed by opening a
-sqlite3.Connection directly and passing it to `SqliteSaver(conn)` —
-runtime owns the connection's lifetime and closes it in the `finally`
-block.
-
-**Ep 18 — Ruff/mypy version drift hotfix (2026-05-09).** The ruff
-0.13.0 bump in pre-commit broke compatibility with newer rule names
-(`TC*`); we keep the legacy `TCH*` aliases in pyproject.toml ignore so
-both versions parse the config. mypy hook adds polars/numpy/pandas-stubs
-to additional_dependencies so it sees the same types as local.
-
-**Ep 19 — execution-node paper invariant (2026-05-09).** Even with
-`LIVE_TRADING=true`, step 1's execution node has no Betfair placeBets
-call wired. The flag is checked, a warning is logged, and bets land in
-paper_bets. Real placement is gated on Phase 4.
+**Ep 22 — Phase 3 step 3: Betfair→warehouse entity resolution
+(2026-05-10).** Migration 010 adds four tables; runtime path uses
+deterministic SQL join only (rapidfuzz only in bootstrap script). Scraper
+drops unresolved events; >50% failure trips circuit breaker with reason
+`unresolved_event`. BettingState gains `resolved_fixture_ids` so analyst
+can use warehouse IDs without overwriting `fixtures_to_process`. Kickoff
+alignment via DATE-level join. `test_paper_trader_once.py` updated to
+seed betfair_team_aliases so the mock event resolves end-to-end.
 
 ---
 
-**Episode 20 — Phase 3 step 1 closeout (2026-05-09).** Eight commits:
-deps → migration 009 → Betfair client → orchestration scaffold → paper-
-trader runtime → integration tests → dashboard page → this handoff.
-Test count: 239 unit, 5 integration, 1 xfailed, several opt-in skips.
+**Episode 23 — Phase 3 step 3 closeout (2026-05-10).** Eight commits:
+migration 010 → resolution.py → bootstrap script → orchestration wiring
+→ model_loader workaround removal → dashboard panel → tests → this
+handoff. Test count: 273 unit, 1 xfailed, integration test gated.
 
 ---
 
@@ -225,8 +204,9 @@ Test count: 239 unit, 5 integration, 1 xfailed, several opt-in skips.
 
 1. Read `CLAUDE.md`, this `HANDOFF.md`. Skip BLUE_MAP/PROJECT_INSTRUCTIONS
    unless a new task touches them.
-2. Confirm test suite: `.\make.ps1 test` (expect 239 passed, 1 xfailed).
+2. Confirm test suite: `.\make.ps1 test` (expect 273 passed, 1 xfailed).
 3. Check live state: `python run.py status` (latest backtest run) and
    `python run.py paper-status` (latest paper-trading invocation).
-4. Decide next step from §4 above — most likely start by wiring the
-   real `score_fn` so the analyst node produces actual probabilities.
+4. Bootstrap Betfair aliases if not done: `python scripts/bootstrap_betfair_aliases.py`.
+5. Decide next step from §4 — most likely wire `live_odds_snapshots`
+   writes and/or run the paper trader against real Betfair data.
