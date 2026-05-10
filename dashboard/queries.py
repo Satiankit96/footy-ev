@@ -668,3 +668,59 @@ def production_model_info(con: duckdb.DuckDBPyConnection) -> dict[str, Any] | No
         "n_predictions": int(n_predictions),
         "mean_edge_pct": float(mean_edge) if mean_edge is not None else None,
     }
+
+
+def entity_resolution_summary(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+    """Betfair entity resolution summary: today's events by status.
+
+    Returns counts for resolved / ambiguous / unresolved and the top
+    unresolved Betfair team names (for operator to know what aliases to add).
+    """
+    counts_row = con.execute(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'resolved')   AS n_resolved,
+            COUNT(*) FILTER (WHERE status = 'ambiguous')  AS n_ambiguous,
+            COUNT(*) FILTER (WHERE status = 'unresolved') AS n_unresolved,
+            COUNT(*) AS n_total
+        FROM betfair_event_resolutions
+        WHERE CAST(resolved_at AS DATE) = CURRENT_DATE
+        """
+    ).fetchone()
+    n_resolved = int(counts_row[0]) if counts_row else 0
+    n_ambiguous = int(counts_row[1]) if counts_row else 0
+    n_unresolved = int(counts_row[2]) if counts_row else 0
+    n_total = int(counts_row[3]) if counts_row else 0
+
+    return {
+        "n_resolved": n_resolved,
+        "n_ambiguous": n_ambiguous,
+        "n_unresolved": n_unresolved,
+        "n_total": n_total,
+        "pct_resolved": round(100.0 * n_resolved / n_total, 1) if n_total > 0 else 0.0,
+    }
+
+
+def entity_resolution_unresolved_events(
+    con: duckdb.DuckDBPyConnection, limit: int = 10
+) -> pl.DataFrame:
+    """Top unresolved Betfair event IDs, most recently seen first.
+
+    Used by the operator to know which events need aliases added.
+    """
+    return con.execute(
+        """
+        SELECT betfair_event_id, status, resolved_at
+        FROM betfair_event_resolutions
+        WHERE status IN ('unresolved', 'ambiguous')
+        ORDER BY resolved_at DESC
+        LIMIT ?
+        """,
+        [limit],
+    ).pl()
+
+
+def betfair_team_aliases_count(con: duckdb.DuckDBPyConnection) -> int:
+    """Total rows in betfair_team_aliases."""
+    row = con.execute("SELECT COUNT(*) FROM betfair_team_aliases").fetchone()
+    return int(row[0]) if row else 0

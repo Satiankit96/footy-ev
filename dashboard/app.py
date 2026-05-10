@@ -707,6 +707,27 @@ def _page_paper_trading() -> None:
 
     st.divider()
 
+    st.subheader("Entity resolution")
+    res_summary = queries.entity_resolution_summary(get_con())
+    if res_summary["n_total"] == 0:
+        st.info("No Betfair event resolutions today. Start the runtime to populate.")
+    else:
+        rcols = st.columns(4)
+        rcols[0].metric("Events today", res_summary["n_total"])
+        rcols[1].metric("Resolved", f"{res_summary['pct_resolved']:.0f}%")
+        rcols[2].metric("Ambiguous", res_summary["n_ambiguous"])
+        rcols[3].metric("Unresolved", res_summary["n_unresolved"])
+
+        unresolved_df = queries.entity_resolution_unresolved_events(get_con(), limit=10)
+        if not unresolved_df.is_empty():
+            st.caption("Top unresolved/ambiguous events (add aliases via bootstrap script):")
+            st.dataframe(unresolved_df.to_pandas(), use_container_width=True)
+
+    n_aliases = queries.betfair_team_aliases_count(get_con())
+    st.caption(f"betfair_team_aliases: {n_aliases} rows mapped")
+
+    st.divider()
+
     st.subheader("Production model")
     model_info = queries.production_model_info(get_con())
     if model_info is None:
