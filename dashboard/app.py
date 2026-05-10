@@ -24,17 +24,22 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+# Resolve relative to this file so the dashboard works regardless of cwd
+# (Streamlit does not chdir into the script's directory). An override path
+# can be set via the FOOTY_EV_DUCKDB env var.
+import os  # noqa: E402
+
 import duckdb  # noqa: E402  -- import after sys.path tweak above
 import polars as pl  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from dashboard import charts, queries  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-
-DB_PATH = Path("data/warehouse/footy_ev.duckdb")
+_DEFAULT_DB_PATH = _PROJECT_ROOT / "data" / "warehouse" / "footy_ev.duckdb"
+DB_PATH = Path(os.environ.get("FOOTY_EV_DUCKDB") or _DEFAULT_DB_PATH).resolve()
 
 st.set_page_config(
     page_title="footy-ev dashboard",
