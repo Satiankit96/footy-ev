@@ -185,8 +185,8 @@ def load_production_scorer(
 
         if feat_df.height == 0:
             _LOG.debug(
-                "model_loader: no feature rows returned for %d fixture_ids "
-                "(Betfair event IDs not yet aligned to v_fixtures_epl namespace).",
+                "model_loader: no feature rows returned for %d fixture_ids; "
+                "these fixtures may lack sufficient rolling history in the warehouse.",
                 len(fixture_ids),
             )
             return []
