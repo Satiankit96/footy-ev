@@ -68,6 +68,26 @@ def _get_con() -> duckdb.DuckDBPyConnection:
     if not DB_PATH.exists():
         st.error(f"Warehouse not found at {DB_PATH}. Run a backtest first.")
         st.stop()
+
+    # Apply pending migrations once with a writable handle (idempotent —
+    # every migration uses CREATE TABLE IF NOT EXISTS). This handles the
+    # case where the warehouse was created before a new migration landed
+    # (e.g. migration 009 paper_trading on a pre-Phase-3 warehouse).
+    # If another process holds the file we silently fall through; the
+    # read-only handle still works for already-applied tables and
+    # surfaces a clear DuckDB error for any missing table.
+    try:
+        from footy_ev.db import apply_migrations, apply_views
+
+        write_con = duckdb.connect(str(DB_PATH))
+        try:
+            apply_migrations(write_con)
+            apply_views(write_con)
+        finally:
+            write_con.close()
+    except duckdb.IOException:
+        pass
+
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 
