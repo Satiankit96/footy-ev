@@ -23,6 +23,9 @@ from footy_ev.db import apply_migrations, apply_views
 from footy_ev.runtime import PaperTraderConfig, run_once
 from footy_ev.venues.betfair import BetfairResponse
 
+_FIXTURE_DATE = "2099-06-01"
+_FIXTURE_ID = f"EPL|2098-2099|arsenal|liverpool|{_FIXTURE_DATE}"
+
 
 @pytest.fixture
 def warehouse(tmp_path: Path) -> duckdb.DuckDBPyConnection:
@@ -30,11 +33,42 @@ def warehouse(tmp_path: Path) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(str(db_path))
     apply_migrations(con)
     apply_views(con)
+    # Seed betfair→warehouse resolution so scraper can resolve "Arsenal v Liverpool"
+    now = datetime(2024, 1, 1)
+    for bf_name, team_id in [("Arsenal", "arsenal"), ("Liverpool", "liverpool")]:
+        con.execute(
+            "INSERT INTO betfair_team_aliases (betfair_team_name, team_id, confidence, resolved_at)"
+            " VALUES (?, ?, 1.0, ?)",
+            [bf_name, team_id, now],
+        )
+    for team_id in ("arsenal", "liverpool"):
+        con.execute(
+            "INSERT OR IGNORE INTO team_aliases (source, raw_name, team_id, confidence, resolved_at)"
+            " VALUES ('football_data', ?, ?, 'manual', ?)",
+            [team_id, team_id, now],
+        )
+    con.execute(
+        "INSERT OR IGNORE INTO raw_match_results"
+        " (league, season, div, match_date, home_team, away_team,"
+        "  source_code, source_url, ingested_at, source_row_hash)"
+        " VALUES ('EPL', '2098-2099', 'E0', ?, 'arsenal', 'liverpool',"
+        "         'football_data', 'http://x', ?, 'hash-ars-liv-pt')",
+        [_FIXTURE_DATE, now],
+    )
     return con
 
 
 def _events_payload() -> list[dict[str, Any]]:
-    return [{"event": {"id": "33001", "name": "ARS v LIV"}}]
+    return [
+        {
+            "event": {
+                "id": "33001",
+                "name": "Arsenal v Liverpool",
+                "openDate": f"{_FIXTURE_DATE}T14:00:00.000Z",
+                "countryCode": "GB",
+            }
+        }
+    ]
 
 
 def _catalogue_payload() -> list[dict[str, Any]]:
@@ -76,7 +110,7 @@ def _make_betfair_mock() -> MagicMock:
 def _score_fn(fixtures: list[str], as_of: Any) -> list[dict[str, Any]]:
     return [
         {
-            "fixture_id": "33001",
+            "fixture_id": fid,
             "market": "ou_2.5",
             "selection": "over",
             "p_calibrated": 0.55,
@@ -84,6 +118,7 @@ def _score_fn(fixtures: list[str], as_of: Any) -> list[dict[str, Any]]:
             "sigma_p": 0.0,
             "model_version": "xgb_ou25_v1",
         }
+        for fid in fixtures
     ]
 
 
