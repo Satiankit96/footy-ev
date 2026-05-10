@@ -82,6 +82,11 @@ class BettingState(TypedDict, total=False):
     fixtures_to_process: list[str]
     as_of: datetime
 
+    # Populated by the scraper after Betfair event IDs are resolved to
+    # warehouse fixture_ids via betfair_team_aliases. The analyst uses
+    # this list for scoring; fixtures_to_process holds the raw Betfair IDs.
+    resolved_fixture_ids: list[str]
+
     odds_snapshots: Annotated[list[OddsSnapshot], add]
     news_deltas: Annotated[list[dict[str, Any]], add]
     model_probs: Annotated[list[ModelProbability], add]

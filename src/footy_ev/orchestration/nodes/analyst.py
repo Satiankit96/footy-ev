@@ -37,7 +37,10 @@ def analyst_node(
     if state.get("circuit_breaker_tripped"):
         return {"model_probs": []}
 
-    fixtures = state.get("fixtures_to_process", [])
+    # Prefer resolved warehouse fixture_ids (set by scraper after entity
+    # resolution). Fall back to fixtures_to_process for tests that bypass
+    # the scraper or for backward compat when resolution is not wired.
+    fixtures: list[str] = state.get("resolved_fixture_ids") or state.get("fixtures_to_process", [])
     if not fixtures:
         return {"model_probs": []}
 

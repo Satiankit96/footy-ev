@@ -39,6 +39,7 @@ def build_graph(
     *,
     betfair: BetfairClient,
     market_id_map: dict[str, list[str]] | None,
+    event_meta_map: dict[str, dict[str, Any]] | None = None,
     score_fn: Callable[..., list[dict[str, Any]]] | None,
     warehouse_con: duckdb.DuckDBPyConnection | None,
 ) -> Any:
@@ -47,10 +48,27 @@ def build_graph(
     The dependencies (Betfair client, score function, warehouse connection)
     are partial-applied to the node callables here so the graph itself
     sees plain `state -> dict` functions and LangGraph's typing is happy.
+
+    Args:
+        betfair: authenticated BetfairClient.
+        market_id_map: Betfair event ID → list of market IDs.
+        event_meta_map: Betfair event ID → event metadata dict (name, openDate,
+            countryCode). Passed to the scraper for entity resolution.
+        score_fn: callable to score fixtures; injected into analyst node.
+        warehouse_con: open DuckDB connection for DB reads/writes in nodes.
     """
     g: StateGraph = StateGraph(BettingState)
 
-    g.add_node("scraper", partial(scraper_node, client=betfair, market_id_map=market_id_map))
+    g.add_node(
+        "scraper",
+        partial(
+            scraper_node,
+            client=betfair,
+            market_id_map=market_id_map,
+            event_meta_map=event_meta_map,
+            con=warehouse_con,
+        ),
+    )
     g.add_node("news", news_node)
     g.add_node("analyst", partial(analyst_node, score_fn=score_fn))
     g.add_node("pricing", pricing_node)

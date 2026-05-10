@@ -91,22 +91,33 @@ def _build_betfair_from_env() -> BetfairClient:
 
 def _resolve_fixtures_and_markets(
     betfair: BetfairClient, days_ahead: int
-) -> tuple[list[str], dict[str, list[str]]]:
-    """Returns (fixture_ids, market_id_map_by_fixture_id).
+) -> tuple[list[str], dict[str, list[str]], dict[str, dict[str, Any]]]:
+    """Returns (betfair_event_ids, market_id_map, event_meta_map).
 
-    For step 1 the "fixture_id" is the Betfair eventId; we don't try to
-    align it to the historical fixture_id namespace yet — that mapping
-    lives in a future step where we backfill v_fixtures with Betfair IDs.
+    `betfair_event_ids` are the Betfair event IDs for events that have
+    at least one OU 2.5 market. `event_meta_map` carries the raw event
+    metadata (name, openDate, countryCode) keyed by event ID so the
+    scraper node can resolve them to warehouse fixture_ids at run time.
     """
     events_resp = betfair.list_events(country_codes=[EPL_COUNTRY_CODE], days_ahead=days_ahead)
     event_ids: list[str] = []
+    event_meta: dict[str, dict[str, Any]] = {}
     if isinstance(events_resp.payload, list):
         for entry in events_resp.payload:
             ev = entry.get("event") if isinstance(entry, dict) else None
-            if ev and ev.get("id"):
-                event_ids.append(str(ev["id"]))
+            if not ev:
+                continue
+            eid = ev.get("id")
+            if eid:
+                eid_str = str(eid)
+                event_ids.append(eid_str)
+                event_meta[eid_str] = {
+                    "name": ev.get("name", ""),
+                    "openDate": ev.get("openDate", ""),
+                    "countryCode": ev.get("countryCode", ""),
+                }
     if not event_ids:
-        return [], {}
+        return [], {}, {}
 
     cat_resp = betfair.list_market_catalogue(event_ids=event_ids, market_types=["OVER_UNDER_25"])
     market_map: dict[str, list[str]] = {}
@@ -121,7 +132,7 @@ def _resolve_fixtures_and_markets(
                 market_map.setdefault(event_id, []).append(str(market_id))
 
     fixture_ids = list(market_map.keys())
-    return fixture_ids, market_map
+    return fixture_ids, market_map, event_meta
 
 
 def run_once(
@@ -159,12 +170,13 @@ def run_once(
                 "Run `python run.py canonical` to generate a qualifying XGBoost backtest."
             )
 
-    fixture_ids, market_map = _resolve_fixtures_and_markets(bf, cfg.fixtures_ahead_days)
+    fixture_ids, market_map, event_meta = _resolve_fixtures_and_markets(bf, cfg.fixtures_ahead_days)
     invocation_id = make_invocation_id(fixture_ids, started_at)
 
     g = build_graph(
         betfair=bf,
         market_id_map=market_map,
+        event_meta_map=event_meta,
         score_fn=effective_score_fn,
         warehouse_con=con,
     )
