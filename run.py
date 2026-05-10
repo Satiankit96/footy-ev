@@ -122,15 +122,29 @@ def paper_trade(
     edge_threshold: float = typer.Option(0.03, "--edge-threshold"),
     once: bool = typer.Option(False, "--once", help="Single-pass test (no loop)."),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
+    model_run_id: str | None = typer.Option(
+        None,
+        "--model-run-id",
+        help=(
+            "Backtest run_id whose XGBoost booster to use as the production scorer. "
+            "Defaults to the env var PAPER_TRADER_MODEL_RUN_ID, then auto-detects "
+            "the latest qualifying run."
+        ),
+    ),
 ) -> None:
     """Start the paper-trading runtime (foreground; Ctrl-C to stop)."""
+    import os
+
     from footy_ev.runtime import PaperTraderConfig, run_forever, run_once
+
+    effective_run_id = model_run_id or os.environ.get("PAPER_TRADER_MODEL_RUN_ID")
 
     cfg = PaperTraderConfig(
         fixtures_ahead_days=fixtures_ahead_days,
         bankroll_gbp=bankroll,
         edge_threshold_pct=edge_threshold,
         db_path=db_path,
+        model_run_id=effective_run_id,
     )
     if once:
         out = run_once(cfg)

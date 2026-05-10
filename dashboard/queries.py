@@ -609,3 +609,62 @@ def fixture_queue(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
         ORDER BY started_at DESC LIMIT 1
         """
     ).pl()
+
+
+def production_model_info(con: duckdb.DuckDBPyConnection) -> dict[str, Any] | None:
+    """Return metadata about the latest completed xgb_ou25_v1 run and its fits.
+
+    Returns None if no qualifying run exists (backtest not yet run).
+    """
+    run_row = con.execute(
+        """
+        SELECT run_id, started_at, completed_at
+        FROM backtest_runs
+        WHERE model_version = 'xgb_ou25_v1'
+          AND status = 'completed'
+        ORDER BY completed_at DESC NULLS LAST
+        LIMIT 1
+        """
+    ).fetchone()
+    if run_row is None:
+        return None
+
+    run_id, started_at, completed_at = run_row
+
+    fit_row = con.execute(
+        """
+        SELECT model_version, MAX(as_of) AS latest_fold_as_of,
+               MAX(fitted_at) AS latest_fitted_at,
+               COUNT(*) AS n_folds,
+               SUM(n_train) AS total_n_train
+        FROM xgb_fits
+        WHERE model_version = 'xgb_ou25_v1'
+          AND fitted_at >= ?
+          AND (? IS NULL OR fitted_at <= ?)
+        """,
+        [started_at, completed_at, completed_at],
+    ).fetchone()
+
+    n_predictions = con.execute(
+        "SELECT COUNT(*) FROM model_predictions WHERE run_id = ?", [run_id]
+    ).fetchone()[0]
+
+    mean_edge = con.execute(
+        """
+        SELECT AVG(edge_at_close)
+        FROM clv_evaluations
+        WHERE run_id = ? AND market = 'ou_2.5'
+        """,
+        [run_id],
+    ).fetchone()[0]
+
+    return {
+        "run_id": run_id,
+        "model_version": (fit_row[0] if fit_row else "xgb_ou25_v1"),
+        "latest_fold_as_of": fit_row[1] if fit_row else None,
+        "latest_fitted_at": fit_row[2] if fit_row else None,
+        "n_folds": int(fit_row[3]) if fit_row and fit_row[3] else 0,
+        "total_n_train": int(fit_row[4]) if fit_row and fit_row[4] else 0,
+        "n_predictions": int(n_predictions),
+        "mean_edge_pct": float(mean_edge) if mean_edge is not None else None,
+    }

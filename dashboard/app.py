@@ -705,6 +705,36 @@ def _page_paper_trading() -> None:
     dist = queries.edge_distribution_paper(get_con(), n=100)
     st.altair_chart(charts.paper_edge_histogram(dist), use_container_width=True)
 
+    st.divider()
+
+    st.subheader("Production model")
+    model_info = queries.production_model_info(get_con())
+    if model_info is None:
+        st.warning(
+            "No production XGBoost model found. "
+            "Run `python run.py canonical` to generate a qualifying backtest."
+        )
+    else:
+        mcols = st.columns(4)
+        mcols[0].metric("Model version", model_info["model_version"])
+        mcols[1].metric("Run ID", model_info["run_id"][:12] + "…")
+        mcols[2].metric("Folds", model_info["n_folds"])
+        mcols[3].metric("Predictions", f"{model_info['n_predictions']:,}")
+        mcols2 = st.columns(3)
+        mcols2[0].metric(
+            "Latest fold as-of",
+            str(model_info["latest_fold_as_of"])[:10] if model_info["latest_fold_as_of"] else "—",
+        )
+        mcols2[1].metric(
+            "Fitted at",
+            str(model_info["latest_fitted_at"])[:16] if model_info["latest_fitted_at"] else "—",
+        )
+        mean_edge = model_info["mean_edge_pct"]
+        mcols2[2].metric(
+            "Mean CLV edge (ou_2.5)",
+            f"{mean_edge:+.2%}" if mean_edge is not None else "—",
+        )
+
 
 if __name__ == "__main__":
     main()

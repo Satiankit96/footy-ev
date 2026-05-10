@@ -45,6 +45,7 @@ DEFAULT_BANKROLL = 1000.0
 DEFAULT_EDGE_THRESHOLD = 0.03
 DEFAULT_FIXTURES_AHEAD_DAYS = 7
 EPL_COUNTRY_CODE = "GB"
+_MODEL_RUN_ID_ENV = "PAPER_TRADER_MODEL_RUN_ID"
 
 
 @dataclass
@@ -55,6 +56,7 @@ class PaperTraderConfig:
     tick_seconds: int = DEFAULT_TICK_SECONDS
     db_path: Path = field(default_factory=lambda: DEFAULT_DB_PATH)
     checkpoint_path: Path = field(default_factory=lambda: DEFAULT_CHECKPOINT_PATH)
+    model_run_id: str | None = None
 
 
 def _open_warehouse(db_path: Path) -> duckdb.DuckDBPyConnection:
@@ -137,13 +139,33 @@ def run_once(
     bf = betfair or _build_betfair_from_env()
     con = warehouse_con or _open_warehouse(cfg.db_path)
 
+    effective_score_fn = score_fn
+    if effective_score_fn is None:
+        from footy_ev.runtime.model_loader import (
+            NoProductionModelError,
+            detect_production_run_id,
+            load_production_scorer,
+        )
+
+        run_id = (
+            cfg.model_run_id or os.environ.get(_MODEL_RUN_ID_ENV) or detect_production_run_id(con)
+        )
+        try:
+            effective_score_fn = load_production_scorer(con, run_id)
+            _LOG.info("paper-trade: using production scorer for run_id=%s", run_id)
+        except NoProductionModelError:
+            _LOG.warning(
+                "paper-trade: no production model found; analyst will emit zero probabilities. "
+                "Run `python run.py canonical` to generate a qualifying XGBoost backtest."
+            )
+
     fixture_ids, market_map = _resolve_fixtures_and_markets(bf, cfg.fixtures_ahead_days)
     invocation_id = make_invocation_id(fixture_ids, started_at)
 
     g = build_graph(
         betfair=bf,
         market_id_map=market_map,
-        score_fn=score_fn,
+        score_fn=effective_score_fn,
         warehouse_con=con,
     )
     compiled, sqlite_conn = compile_graph(g, checkpoint_path=cfg.checkpoint_path)
