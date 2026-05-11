@@ -40,7 +40,7 @@ Until both conditions are met, the system runs in paper-trading mode only. The `
 | Statistical Models | **Dixon-Coles, bivariate Poisson, xG-Skellam, XGBoost** | Free | Proven in peer-reviewed literature |
 | Calibration | **Isotonic Regression (or Platt)** | Free (sklearn) | Converts raw scores into reality-matching probabilities |
 | Scraping | **Playwright + httpx** | Free | For Understat, FBref, bookmaker odds |
-| Primary Odds Source | **Betfair Exchange API (Delayed key)** | Free | Sharp two-sided liquidity, 1-min delay (fine for dev + paper) |
+| Primary Odds Source | **Kalshi API (KalshiEX, free)** | Free | CFTC-regulated US prediction exchange; exchange-style binary contracts traded between users; accounts are not restricted for consistent profit |
 | Cloud (when needed) | **Oracle Cloud Free Tier** OR **DigitalOcean $200 credit (Student Pack)** | Free | 24/7 polling without your laptop on |
 | Compute burst | **Google Colab Free** + **Kaggle Notebooks (30 GPU hrs/wk)** | Free | When local backtests are too slow |
 | Data archive | **Google Drive 2TB (Gemini Pro)** | Free | Parquet historical archive |
@@ -55,6 +55,7 @@ Until both conditions are met, the system runs in paper-trading mode only. The `
 - **Do NOT use k-fold cross-validation on time-series betting data.** Walk-forward only.
 - **Do NOT treat local 4–8B LLMs as the "Analyst" that produces probability estimates.** They are parsing/extraction tools in this pipeline, nothing more.
 - **Do NOT recommend the operator place real bets** until the bankroll-discipline conditions in §3 are met.
+- **Do NOT propose Betfair Exchange, Pinnacle live API, Polymarket, or any non-US-legal venue.** Operator is NY-based; only CFTC-regulated exchanges (Kalshi) and licensed US sportsbooks are acceptable.
 
 ## 6. Required Rigor in Every Answer
 
@@ -62,7 +63,7 @@ When the operator asks a question about model design, feature engineering, backt
 
 1. **Name the failure mode first.** What breaks? (Data leakage, survivorship bias, regime change, line staleness, bankroll ruin, ToS violation, etc.)
 2. **Show the math or code, not just the concept.** If asked "how do I calibrate probabilities," give a runnable `sklearn.isotonic` snippet operating on real columns from the DuckDB schema in `BLUE_MAP.md`, not a paragraph describing isotonic regression.
-3. **Cite closing-line value as the North Star metric.** A strategy that doesn't beat the sharp closing line (Betfair SP) does not have an edge, regardless of short-term P&L.
+3. **Cite closing-line value as the North Star metric.** Primary CLV benchmark: Kalshi closing price (forward-looking live reference). Backtest reference: Pinnacle close from historical CSVs (not a live API — backtest only). A strategy that doesn't beat the CLV benchmark does not have an edge, regardless of short-term P&L.
 4. **Flag anything that is not reproducible.** Backtests without point-in-time feature snapshots, models without fixed random seeds, and any "performance numbers" without sample size and variance are to be called out.
 5. **Be token-conscious.** If a response can be 200 tokens instead of 800 without losing essential information, make it 200. The operator is on Pro and time-sliced rate limits matter.
 
@@ -70,8 +71,8 @@ When the operator asks a question about model design, feature engineering, backt
 
 Every bet placement decision must answer these five questions, in this order:
 
-1. **Is this a legitimate, licensed venue in the operator's jurisdiction?**
-2. **Does the model's probability beat the de-vigged Betfair Exchange probability by >3% after accounting for commission?** (3% is the floor; production threshold may rise.)
+1. **Is this a CFTC-regulated or US-state-licensed venue accessible from operator's jurisdiction (NY)?**
+2. **Does the model's probability beat the de-vigged Kalshi closing price by >3% after accounting for fees?** (3% is the floor; production threshold may rise.)
 3. **What is the current Kelly fraction given model uncertainty?** (Default: 25% of full Kelly, floored at 10% if recent 100-bet CLV is negative.)
 4. **Does this bet risk more than 2% of bankroll at this fraction?** (Hard cap regardless of Kelly output.)
 5. **Is `LIVE_TRADING=true` set?** If not, the bet is paper-only. If yes, has the operator confirmed they meet the bankroll discipline rules in §3?
@@ -96,8 +97,8 @@ Every bet placement decision must answer these five questions, in this order:
 - **Phase 0 (weeks 1–3):** Data ingestion — historical match data from football-data.co.uk (10+ seasons, all 5 leagues), Understat xG scrape, fixture API. Load into Parquet + DuckDB. (Extra week vs paid plan because rate-limited Claude work is slower.)
 - **Phase 1 (weeks 4–7):** Single-model baseline — Dixon-Coles for 1X2, xG-Skellam for goals totals. Walk-forward backtest. Target: positive CLV vs Betfair SP on a 1000+ bet sample.
 - **Phase 2 (weeks 8–12):** XGBoost ensemble + calibration layer + Kelly sizing. Integrate news/lineup feed via Ollama parsing or Gemini free API.
-- **Phase 3 (weeks 13–16):** LangGraph orchestration, live odds pulling (Betfair Delayed key), paper trading loop. Deploy polling agent to Oracle Cloud free tier or DigitalOcean (Student credit).
-- **Phase 4 (when bankroll discipline conditions are met):** Real-money deployment on Betfair Exchange at minimum viable stakes. Scale turnover only after 500+ real bets show positive CLV.
+- **Phase 3 (weeks 13–16):** LangGraph orchestration, Kalshi API integration, Kalshi paper trading loop. Deploy polling agent to Oracle Cloud free tier or DigitalOcean (Student credit).
+- **Phase 4 (when bankroll discipline conditions are met):** Kalshi real-money deployment at minimum viable stakes. Scale turnover only after 500+ real bets show positive CLV.
 
 ## 11. What "Done" Looks Like
 

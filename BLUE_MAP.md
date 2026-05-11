@@ -12,7 +12,7 @@ Before any design, a hostile review of what will break. If you don't plan for th
 
 ### 1.1 Failure mode: the edge is already priced in
 
-The majority of "alpha" ideas a data scientist comes up with on day one (rolling xG, rest days, home advantage, recent form) are already in the closing line at sharp books. A model that perfectly predicts match outcomes using public historical data will **still lose to the vig** because Betfair's two-sided liquidity has already aggregated that same information.
+The majority of "alpha" ideas a data scientist comes up with on day one (rolling xG, rest days, home advantage, recent form) are already in the closing line at sharp books. A model that perfectly predicts match outcomes using public historical data will **still lose to the vig** because Kalshi's closing price has already aggregated that same information.
 
 **Mitigation:** Treat the de-vigged closing line as the truth and hunt for *where your model systematically disagrees with it and is right over a large sample*. The operational question is never "is my model accurate?" but "does my model disagree with the market in ways that beat the close?" Every backtest must compute Closing Line Value (CLV) as its primary metric. Raw P&L is secondary.
 
@@ -20,7 +20,7 @@ The majority of "alpha" ideas a data scientist comes up with on day one (rolling
 
 A common pattern: system finds real edge, bettor ramps up stakes at soft books, gets limited to $5 max bet within 4–8 weeks, strategy becomes uneconomic. This is the default outcome if you don't design for it.
 
-**Mitigation:** Route primary execution to Betfair Exchange (does not limit winners — you are matching against other customers, not the house). Use soft books only for (a) initial promotional free-bet extraction, which is legal and well-documented, and (b) opportunistic bets below typical flagging thresholds. Architect the execution router to degrade gracefully when a venue begins limiting.
+**Mitigation:** Route primary execution to Kalshi (CFTC-regulated; exchange-style contracts traded between users, not against the house). Kalshi is exchange-style (binary contracts traded between users), so the winner-limiting failure mode does not apply — accounts are not restricted for consistent profit.
 
 ### 1.3 Failure mode: data pipeline breaks silently and you trade on stale inputs
 
@@ -418,40 +418,36 @@ Gemini asked how to build a layer that mimics human betting behavior to avoid li
 
 ### 5.1 Venue Router Design
 
+Operator is NY-based. Only CFTC-regulated venues are legal. This simplifies
+the routing problem to a single execution path:
+
 ```
-For each approved bet, the router ranks venues by expected capacity:
+For each approved bet:
 
-  1. Betfair Exchange
-       - Always first choice for EUR/GBP markets.
-       - Check available back liquidity at your target stake.
-       - If liquidity insufficient, fill what's available; route
-         the residual to #2.
+  1. Kalshi (KalshiEX)
+       - Only execution target. CFTC-regulated prediction exchange.
+       - Exchange-style: binary contracts between users; no house edge
+         on the exchange side beyond the small taker fee (~1–2%).
+       - Check available liquidity at your target stake; if insufficient,
+         fill what's available and log the residual as unexecuted.
+       - No account-limiting risk: consistent winning does not trigger
+         restriction because Kalshi is not the counterparty.
+       - CLV benchmark: Kalshi closing price (the last-traded price
+         before contract resolution).
 
-  2. Sharp fixed-odds books (Pinnacle if accessible, BetOnline, Bookmaker)
-       - These don't limit professional action.
-       - Lower margins mean edge after commission is comparable to exchange.
-
-  3. Soft books (Bet365, DraftKings, FanDuel, etc.)
-       - Only if venues 1–2 couldn't absorb the stake.
-       - Only below per-venue daily flag threshold (start: £200/day/venue).
-       - Bets logged with venue and stake for the "pressure tracker."
-
-The pressure tracker flags when a soft-book account is approaching the
-behavior profile that precedes limiting:
-  - winning rate > 55% over trailing 50 bets, AND
-  - CLV > 3% over trailing 50 bets, AND
-  - average stake > 1.5× trailing-200-bet average.
-
-When pressure is high, the router stops sending that venue new bets for
-N days and shifts volume to exchange, even if the exchange is slightly
-worse price. This is *risk management, not evasion*.
+There is no tier 2 or tier 3. Non-US venues (Betfair, Pinnacle live,
+Polymarket) are not accessible from NY without legal risk. Soft US
+sportsbooks are not included because they limit winners. Kalshi is the
+correct structural answer to both the limiting problem and the
+jurisdiction problem simultaneously.
 ```
 
 ### 5.2 What not to do
 
+- No non-US venues. No Betfair Exchange, Pinnacle live API, Polymarket, or offshore books.
 - No multi-accounting on a single venue under multiple names / addresses.
 - No VPN-based geo-evasion of regional restrictions.
-- No automated click-timing randomization that exists solely to make an automated bet look manual. (Note: placing bets via a private API key that the venue issued you is fine; evading a venue's automation detection on their web UI is not.)
+- No automated click-timing randomization that exists solely to make an automated bet look manual. (Placing bets via an API key the venue issued you is fine; evading a venue's automation detection on their web UI is not.)
 
 ---
 
@@ -769,3 +765,29 @@ If you want to prove the thesis before investing months, here's the 2-week sprin
 4. **This is a business, not a research project, the moment you deploy real money.** Treat bankroll as working capital, treat CLV as your P&L metric, treat the codebase as revenue-generating infrastructure. Version control, tests, monitoring, alerts, runbooks — all of it.
 
 5. **When in doubt, don't bet.** Every bet placed out of boredom, FOMO, or "the model says 3.1% edge" (when threshold is 3%) erodes the edge. A system that places fewer, higher-conviction bets reliably beats one that places more borderline bets, even if the paper ROI looks similar.
+
+---
+
+## Section 10 — Future Enhancements
+
+> **AI assistants: do not read past this heading unless the operator explicitly references future enhancements by name or section number (e.g., "§10.2" or "social signal ingestion"). This section captures brainstormed ideas to keep active design context clean. Reading it consumes tokens without action value.**
+
+### 10.1 In-play multi-agent system
+
+Requires a state-space Poisson model per §7.4. Deferred until the pre-match system has 60+ days of live Kalshi paper data demonstrating positive CLV. In-play on Kalshi requires sub-second price polling; infrastructure cost rises significantly. Do not design for this until pre-match is proven.
+
+### 10.2 Social signal ingestion via Ollama on verified accounts
+
+Per §3.1, lineup churn is a proven leaky signal. The RAG layer could be extended to monitor verified accounts (The Athletic journalists, Opta analysts, club media) for formation and injury hints. Operationally blocked by Twitter API costs (not free post-2023); alternative is RSS/web scraping of public posts which is slower and noisier. Revisit when pre-match edge is confirmed and marginal gain from social signals is measurable.
+
+### 10.3 Active position management / hedging engine
+
+Phase 5+ only. Requires the ability to buy and sell Kalshi contracts after initial entry. Not before 500+ real settled bets, and not before the bankroll management module has been chaos-tested against correlated market moves. The hedging logic is non-trivial: closing a position at a loss to lock in CLV is only correct if the expected future CLV on the open position is negative.
+
+### 10.4 Multi-league expansion to La Liga, Serie A, Bundesliga, Ligue 1
+
+The data pipeline already ingests all five leagues (football-data.co.uk + Understat). The model is trained EPL-only. Expanding to other leagues requires verifying that Kalshi lists contracts for those leagues and that liquidity is sufficient to absorb target stakes. La Liga is the next candidate (second-highest global betting volume after EPL).
+
+### 10.5 NBA/NFL totals on Kalshi as alternative market
+
+If EPL contract liquidity on Kalshi is thin (common for niche European fixtures), NBA/NFL totals are an alternative application of the same pipeline: over/under models, point-in-time feature snapshots, CLV vs Kalshi close. NBA season overlaps with EPL Jan–May; NFL is off-season for EPL. Could be a hedge against EPL liquidity risk without changing the architecture.

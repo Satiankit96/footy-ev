@@ -42,7 +42,7 @@ Development runs on **Windows 11 / PowerShell 5.1**. All commands in this file a
 - **Pydantic v2** for all data validation
 - **Playwright** (sync API + stealth) for scraping
 - **Ollama** (Llama 3.1 8B) for local LLM extraction; fall back to Gemini API free tier if RAM-constrained
-- **Betfair Exchange API (Delayed key, free)** as primary odds source
+- **Kalshi API (KalshiEX, free)** as primary venue. Operator is NY-based, US-jurisdiction only.
 - **Oracle Cloud Free Tier** or **DigitalOcean (Student credit)** for 24/7 deployment
 
 ## Banned paths
@@ -52,6 +52,7 @@ Do not propose, design, or implement any of the following. If asked, push back a
 - Multi-account schemes, "ghost execution," human-mimicking bet sequencers, or any technique whose purpose is to evade sportsbook ToS. Route volume through exchanges instead.
 - K-fold cross-validation on time-series data. Walk-forward only.
 - Pinnacle as a live odds API source (public access shut down July 2025).
+- Non-US-legal venues. No Betfair Exchange, Polymarket, offshore books. No VPN geo-evasion.
 - Transformer / DeepAR / RNN architectures for in-play in Phase 1.
 - Local 4–8B LLMs as the "Analyst" producing probability estimates. They parse text; they do not predict.
 - Paid services as if they're necessary. The system must work end-to-end on free tooling.
@@ -121,4 +122,4 @@ For each of these, see `BLUE_MAP.md` §1 for the full mitigation:
 - If a request seems too vague to plan from, ask one targeted clarifying question.
 - If you've been working for a while and the context feels stale, suggest `/clear` and a fresh start with a focused prompt.
 - If the operator hits a rate limit, suggest they continue in Gemini 2.5 Pro web chat for the same task and paste results back when Pro resets.
- b
+- If asked about `BLUE_MAP.md §10`, read it only when the operator explicitly references it by section number (e.g., "§10.2") or topic name. Do not read it proactively.
