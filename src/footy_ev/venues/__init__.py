@@ -6,6 +6,8 @@ Primary venue: Kalshi (US-legal, CFTC-regulated, NY operator).
 from footy_ev.venues.exceptions import StaleResponseError
 from footy_ev.venues.kalshi import (
     KalshiClient,
+    KalshiEvent,
+    KalshiMarket,
     KalshiResponse,
     decimal_odds_to_price,
     price_to_decimal_odds,
@@ -18,6 +20,8 @@ from footy_ev.venues.resolution import (
 
 __all__ = [
     "KalshiClient",
+    "KalshiEvent",
+    "KalshiMarket",
     "KalshiMarketResolution",
     "KalshiResponse",
     "StaleResponseError",
