@@ -45,3 +45,6 @@ reports/
 secrets/
 *.key
 *.pem
+
+# Kalshi demo capture files (contain live ticker data + auth-stamped responses)
+tests/fixtures/kalshi_demo_capture_*.json

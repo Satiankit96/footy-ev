@@ -12,3 +12,4 @@ node_modules/
 secrets/
 .env
 .env.*
+tests/fixtures/kalshi_demo_capture_*.json
