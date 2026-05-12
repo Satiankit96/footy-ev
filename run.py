@@ -1,17 +1,28 @@
-"""Top-level orchestrator for footy-ev canonical pipeline.
+"""footy-ev unified runner.
 
-Pure orchestration — calls into existing library functions. No business logic.
+Usage:
+  uv run python run.py                            # one pipeline cycle, exit
+  uv run python run.py loop --interval-min 15     # cycles every N minutes
+  uv run python run.py dashboard                  # launch Streamlit dashboard
+  uv run python run.py status                     # print state, no pipeline run
+  uv run python run.py bootstrap                  # refresh Kalshi aliases
 
-Subcommands:
-    canonical  Run xG-Skellam (if needed) → XGBoost → evaluate → print verdict.
-    dashboard  Launch Streamlit dashboard.
-    status     Print latest backtest_runs row + verdict + counts.
+Existing subcommands (canonical, paper-trade, paper-status) are preserved so
+`make.ps1` targets keep working. Business logic stays in src/footy_ev/ —
+run.py imports and orchestrates only.
+
+Default venue per .env. LIVE_TRADING=true refused until Phase 4 conditions met.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
+import time
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import duckdb
 import typer
@@ -19,21 +30,45 @@ import typer
 from footy_ev.backtest.walkforward import run_backtest
 from footy_ev.db import apply_migrations, apply_views
 from footy_ev.eval.cli import evaluate_run
+from footy_ev.runtime.status import DEMO_BASE_URL, print_status_table
 
-app = typer.Typer(add_completion=False, help="footy-ev canonical pipeline orchestrator.")
+app = typer.Typer(add_completion=False, help="footy-ev unified runner.")
 
 DEFAULT_DB_PATH = Path("data/warehouse/footy_ev.duckdb")
+DASHBOARD_APP_PATH = (Path(__file__).resolve().parent / "dashboard" / "app.py").resolve()
+
+
+def _refuse_if_live_trading() -> None:
+    if os.environ.get("LIVE_TRADING", "").lower() in {"true", "1", "yes"}:
+        typer.echo(
+            "LIVE_TRADING is enabled but Phase 4 conditions are not validated. "
+            "Unset to proceed in paper mode."
+        )
+        raise typer.Exit(code=1)
+
+
+def _require_kalshi_env() -> None:
+    if not os.environ.get("KALSHI_API_KEY_ID"):
+        typer.echo("KALSHI_API_KEY_ID is not set. Copy .env.example to .env and fill it in.")
+        raise typer.Exit(code=1)
+    pem_path = Path(os.environ.get("KALSHI_PRIVATE_KEY_PATH", "data/kalshi_private_key.pem"))
+    if not pem_path.exists():
+        typer.echo(
+            f"Kalshi private key not found at {pem_path}. "
+            "Set KALSHI_PRIVATE_KEY_PATH or place the PEM at data/kalshi_private_key.pem."
+        )
+        raise typer.Exit(code=1)
+
+
+def _warn_if_base_url_unset() -> None:
+    if not os.environ.get("KALSHI_API_BASE_URL"):
+        typer.echo(f"WARN: KALSHI_API_BASE_URL unset; defaulting to {DEMO_BASE_URL}")
 
 
 @app.callback(invoke_without_command=True)  # type: ignore[misc]
 def _root(ctx: typer.Context) -> None:
-    """Print help when invoked with no subcommand."""
     if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())
-        typer.echo(
-            "\nTry `python run.py status` for a quick overview, "
-            "or `python run.py --help` for all commands."
-        )
+        cycle()
 
 
 def _open_db(db_path: Path) -> duckdb.DuckDBPyConnection:
@@ -56,7 +91,72 @@ def _latest_run_id(con: duckdb.DuckDBPyConnection, model_version: str) -> str | 
     return row[0] if row else None
 
 
-@app.command("canonical")
+def _run_cycle() -> dict[str, Any]:
+    from footy_ev.runtime import PaperTraderConfig, run_once
+
+    cfg = PaperTraderConfig(db_path=DEFAULT_DB_PATH)
+    return run_once(cfg)
+
+
+@app.command("cycle")  # type: ignore[misc]
+def cycle() -> None:
+    """Run one end-to-end paper-trader pipeline cycle and print the state table."""
+    _refuse_if_live_trading()
+    _require_kalshi_env()
+    _warn_if_base_url_unset()
+    out = _run_cycle()
+    typer.echo(
+        f"\nCycle complete: invocation={out['invocation_id']} "
+        f"candidates={out['n_candidates']} approved={out['n_approved']} "
+        f"breaker={out['breaker_tripped']}"
+    )
+    if out.get("last_error"):
+        typer.echo(f"last_error: {out['last_error']}")
+    print_status_table(_open_db(DEFAULT_DB_PATH), emit=typer.echo)
+
+
+@app.command("loop")  # type: ignore[misc]
+def loop(interval_min: int = typer.Option(15, "--interval-min", min=1)) -> None:
+    """Run cycles every N minutes. Ctrl+C to stop after the current cycle."""
+    _refuse_if_live_trading()
+    _require_kalshi_env()
+    _warn_if_base_url_unset()
+    typer.echo(f"loop: every {interval_min} min. Ctrl+C to stop.")
+    try:
+        while True:
+            out = _run_cycle()
+            typer.echo(
+                f"[{datetime.now(tz=UTC).isoformat()}] cycle: "
+                f"candidates={out['n_candidates']} approved={out['n_approved']} "
+                f"breaker={out['breaker_tripped']}"
+            )
+            time.sleep(interval_min * 60)
+    except KeyboardInterrupt:
+        typer.echo("\nStopping after current cycle...")
+        raise typer.Exit(code=0) from None
+
+
+@app.command("bootstrap")  # type: ignore[misc]
+def bootstrap() -> None:
+    """Refresh Kalshi event-ticker to fixture aliases (bootstrap_kalshi_aliases --live)."""
+    _refuse_if_live_trading()
+    _require_kalshi_env()
+    _warn_if_base_url_unset()
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
+    from bootstrap_kalshi_aliases import main as bootstrap_main  # type: ignore[import-not-found]
+
+    rc = bootstrap_main(["--live"])
+    raise typer.Exit(code=rc)
+
+
+@app.command("status")  # type: ignore[misc]
+def status(db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path")) -> None:
+    """Print pipeline state - no API calls, warehouse-only."""
+    print_status_table(_open_db(db_path), emit=typer.echo)
+
+
+# --- Legacy subcommands preserved for make.ps1 compatibility ----------------
+@app.command("canonical")  # type: ignore[misc]
 def canonical(
     league: str = typer.Option("EPL", "--league"),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
@@ -93,7 +193,6 @@ def canonical(
 
     typer.echo("[canonical] evaluating XGBoost run (no calibration)...")
     summary = evaluate_run(con, xgb_run_id, no_calibrate=True)
-
     verdict = summary.get("verdict", "?")
     mean = summary.get("mean_edge_winners", float("nan"))
     ci_low = summary.get("ci_low", float("nan"))
@@ -109,10 +208,6 @@ def canonical(
     typer.echo(f"p-value       = {pval:.4f}")
     typer.echo(f"n_evaluations = {n_eval}")
     typer.echo("=" * 60)
-    typer.echo("dashboard     : .\\make.ps1 dashboard  (or http://localhost:8501)")
-
-
-DASHBOARD_APP_PATH = (Path(__file__).resolve().parent / "dashboard" / "app.py").resolve()
 
 
 @app.command("paper-trade")  # type: ignore[misc]
@@ -122,23 +217,12 @@ def paper_trade(
     edge_threshold: float = typer.Option(0.03, "--edge-threshold"),
     once: bool = typer.Option(False, "--once", help="Single-pass test (no loop)."),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
-    model_run_id: str | None = typer.Option(
-        None,
-        "--model-run-id",
-        help=(
-            "Backtest run_id whose XGBoost booster to use as the production scorer. "
-            "Defaults to the env var PAPER_TRADER_MODEL_RUN_ID, then auto-detects "
-            "the latest qualifying run."
-        ),
-    ),
+    model_run_id: str | None = typer.Option(None, "--model-run-id"),
 ) -> None:
     """Start the paper-trading runtime (foreground; Ctrl-C to stop)."""
-    import os
-
     from footy_ev.runtime import PaperTraderConfig, run_forever, run_once
 
     effective_run_id = model_run_id or os.environ.get("PAPER_TRADER_MODEL_RUN_ID")
-
     cfg = PaperTraderConfig(
         fixtures_ahead_days=fixtures_ahead_days,
         bankroll_gbp=bankroll,
@@ -149,12 +233,9 @@ def paper_trade(
     if once:
         out = run_once(cfg)
         typer.echo(
-            "paper-trade --once: "
-            f"invocation={out['invocation_id']} "
-            f"fixtures={out['n_fixtures']} "
-            f"candidates={out['n_candidates']} "
-            f"approved={out['n_approved']} "
-            f"breaker={out['breaker_tripped']}"
+            f"paper-trade --once: invocation={out['invocation_id']} "
+            f"fixtures={out['n_fixtures']} candidates={out['n_candidates']} "
+            f"approved={out['n_approved']} breaker={out['breaker_tripped']}"
         )
         if out["last_error"]:
             typer.echo(f"last_error: {out['last_error']}")
@@ -169,9 +250,7 @@ def paper_trade(
 
 
 @app.command("paper-status")  # type: ignore[misc]
-def paper_status(
-    db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
-) -> None:
+def paper_status(db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path")) -> None:
     """Print latest paper-trading invocation, recent bets, breaker state."""
     con = _open_db(db_path)
     inv = con.execute(
@@ -215,50 +294,13 @@ def paper_status(
             )
 
 
-@app.command("dashboard")
+@app.command("dashboard")  # type: ignore[misc]
 def dashboard() -> None:
     """Launch the Streamlit dashboard."""
     subprocess.run(
         ["uv", "run", "streamlit", "run", str(DASHBOARD_APP_PATH)],
         check=False,
     )
-
-
-@app.command("status")
-def status(
-    db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path"),
-) -> None:
-    """Print latest run state, verdict, and counts."""
-    con = _open_db(db_path)
-
-    row = con.execute(
-        """
-        SELECT run_id, model_version, status, started_at, completed_at,
-               n_folds, n_predictions
-        FROM backtest_runs
-        ORDER BY started_at DESC NULLS LAST LIMIT 1
-        """
-    ).fetchone()
-    if row is None:
-        typer.echo("no backtest_runs rows yet.")
-        return
-
-    run_id, mv, st, started, completed, n_folds, n_preds = row
-    typer.echo(f"latest_run_id   = {run_id}")
-    typer.echo(f"model_version   = {mv}")
-    typer.echo(f"status          = {st}")
-    typer.echo(f"started_at      = {started}")
-    typer.echo(f"completed_at    = {completed}")
-    typer.echo(f"n_folds         = {n_folds}")
-    typer.echo(f"n_predictions   = {n_preds}")
-
-    n_eval = con.execute(
-        "SELECT COUNT(*) FROM clv_evaluations WHERE run_id = ?", [run_id]
-    ).fetchone()[0]
-    typer.echo(f"n_evaluations   = {n_eval}")
-
-    last_fit = con.execute("SELECT MAX(fitted_at) FROM xgb_fits").fetchone()[0]
-    typer.echo(f"last_xgb_fit    = {last_fit}")
 
 
 if __name__ == "__main__":
