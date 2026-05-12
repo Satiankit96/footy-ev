@@ -131,10 +131,11 @@ def test_run_once_writes_paper_bet_and_summary(
         edge_threshold_pct=0.03,
         db_path=tmp_path / "wh.duckdb",
         checkpoint_path=tmp_path / "checkpoints.sqlite",
+        venue="betfair_exchange",
     )
     out = run_once(
         cfg,
-        betfair=_make_betfair_mock(),
+        client=_make_betfair_mock(),
         score_fn=_score_fn,
         warehouse_con=warehouse,
     )
@@ -164,6 +165,7 @@ def test_run_once_logs_breaker_on_stale_data(
         edge_threshold_pct=0.03,
         db_path=tmp_path / "wh.duckdb",
         checkpoint_path=tmp_path / "checkpoints.sqlite",
+        venue="betfair_exchange",
     )
     bf = _make_betfair_mock()
     bf.list_market_book.return_value = BetfairResponse(
@@ -172,7 +174,7 @@ def test_run_once_logs_breaker_on_stale_data(
         source_timestamp=datetime.now(tz=UTC),
         staleness_seconds=600,
     )
-    out = run_once(cfg, betfair=bf, score_fn=_score_fn, warehouse_con=warehouse)
+    out = run_once(cfg, client=bf, score_fn=_score_fn, warehouse_con=warehouse)
     assert out["breaker_tripped"] is True
     n_breaker = warehouse.execute("SELECT COUNT(*) FROM circuit_breaker_log").fetchone()[0]
     assert n_breaker >= 1

@@ -176,8 +176,9 @@ def test_paper_trade_emits_bet_with_resolution(tmp_path: Path) -> None:
         db_path=db_path,
         checkpoint_path=tmp_path / "checkpoints.sqlite",
         model_run_id=run_id,
+        venue="betfair_exchange",
     )
-    result = run_once(cfg, betfair=bf)
+    result = run_once(cfg, client=bf)
 
     # Verify no runtime error
     assert result["last_error"] is None, f"run_once error: {result['last_error']}"

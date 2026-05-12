@@ -93,6 +93,7 @@ def test_scraper_no_con_uses_betfair_id() -> None:
         {"fixtures_to_process": ["evt_42"]},
         client=client,
         market_id_map={"evt_42": ["1.1.OU25"]},
+        venue="betfair_exchange",
     )
     assert len(out["odds_snapshots"]) == 2
     assert out["odds_snapshots"][0].fixture_id == "evt_42"
@@ -117,6 +118,7 @@ def test_scraper_resolved_event_uses_warehouse_id(con: duckdb.DuckDBPyConnection
         market_id_map={"evt_1": ["1.1.OU25"]},
         event_meta_map={"evt_1": _meta("Arsenal v Liverpool")},
         con=con,
+        venue="betfair_exchange",
     )
     assert len(out["odds_snapshots"]) == 2
     assert out["odds_snapshots"][0].fixture_id == wh_fixture_id
@@ -133,6 +135,7 @@ def test_scraper_unresolved_event_drops_snapshots(con: duckdb.DuckDBPyConnection
         market_id_map={"evt_1": ["1.1.OU25"]},
         event_meta_map={"evt_1": _meta("Ghost City v Phantom United")},
         con=con,
+        venue="betfair_exchange",
     )
     assert out["odds_snapshots"] == []
     assert out["resolved_fixture_ids"] == []
@@ -165,6 +168,7 @@ def test_scraper_three_events_two_resolve(con: duckdb.DuckDBPyConnection) -> Non
             "evt_3": _meta("Ghost FC v Phantom United"),
         },
         con=con,
+        venue="betfair_exchange",
     )
     # 2 resolved events × 2 runners = 4 snapshots
     assert len(out["odds_snapshots"]) == 4
@@ -190,6 +194,7 @@ def test_scraper_over_50pct_unresolved_trips_breaker(con: duckdb.DuckDBPyConnect
             "evt_3": _meta("Neverland v Nowhere"),
         },
         con=con,
+        venue="betfair_exchange",
     )
     # 2/3 = 67% fail → breaker tripped
     assert out["circuit_breaker_tripped"] is True

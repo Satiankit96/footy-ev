@@ -34,14 +34,21 @@ def _make_response(payload: Any, *, staleness: int = 0) -> BetfairResponse:
 
 def test_scraper_returns_empty_when_no_fixtures() -> None:
     client = MagicMock()
-    out = scraper_node({"fixtures_to_process": []}, client=client, market_id_map={})
+    out = scraper_node(
+        {"fixtures_to_process": []}, client=client, market_id_map={}, venue="betfair_exchange"
+    )
     assert out["odds_snapshots"] == []
     assert out["circuit_breaker_tripped"] is False
 
 
 def test_scraper_returns_empty_without_market_map() -> None:
     client = MagicMock()
-    out = scraper_node({"fixtures_to_process": ["ARS-LIV"]}, client=client, market_id_map=None)
+    out = scraper_node(
+        {"fixtures_to_process": ["ARS-LIV"]},
+        client=client,
+        market_id_map=None,
+        venue="betfair_exchange",
+    )
     assert out["odds_snapshots"] == []
 
 
@@ -52,6 +59,7 @@ def test_scraper_extracts_ou25_snapshots() -> None:
         {"fixtures_to_process": ["ARS-LIV"]},
         client=client,
         market_id_map={"ARS-LIV": ["1.1.OU25"]},
+        venue="betfair_exchange",
     )
     assert len(out["odds_snapshots"]) == 2
     selections = {s.selection for s in out["odds_snapshots"]}
@@ -65,6 +73,7 @@ def test_scraper_trips_breaker_on_stale_response() -> None:
         {"fixtures_to_process": ["ARS-LIV"]},
         client=client,
         market_id_map={"ARS-LIV": ["1.1.OU25"]},
+        venue="betfair_exchange",
     )
     assert out["circuit_breaker_tripped"] is True
     assert "stale" in out["breaker_reason"].lower()
@@ -77,6 +86,7 @@ def test_scraper_trips_breaker_on_exception() -> None:
         {"fixtures_to_process": ["ARS-LIV"]},
         client=client,
         market_id_map={"ARS-LIV": ["1.1.OU25"]},
+        venue="betfair_exchange",
     )
     assert out["circuit_breaker_tripped"] is True
     assert "RuntimeError" in out["breaker_reason"]
