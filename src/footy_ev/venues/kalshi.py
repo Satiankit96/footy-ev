@@ -1,19 +1,17 @@
-"""Kalshi Exchange client stub (Phase 3 step 5a).
+"""Kalshi Exchange client — Phase 3 step 5b implementation.
 
-RSA-PSS/SHA256 per-request signing is deferred to Phase 3 step 5b. Every
-public method raises NotImplementedError so the paper-trader fails fast and
-clearly rather than silently doing nothing.
+RSA-PSS/SHA256 per-request signing with Pydantic-validated response models.
 
-Auth headers (step 5b will fill these in):
+Auth headers:
   KALSHI-ACCESS-KEY        — key ID from env var KALSHI_API_KEY_ID
   KALSHI-ACCESS-SIGNATURE  — base64(RSA-PSS-SHA256(timestamp + METHOD + path))
   KALSHI-ACCESS-TIMESTAMP  — millisecond epoch as string
 
-Private PEM is expected at data/kalshi_private_key.pem (gitignored).
-Key ID comes from env var KALSHI_API_KEY_ID.
+Private PEM at data/kalshi_private_key.pem (gitignored).
+Key ID from env var KALSHI_API_KEY_ID.
 
-Price convention: Kalshi prices are floats in [0.01, 0.99] representing
-YES contract probability in dollars (e.g. 0.55 means 55 cents per dollar).
+Price convention: Kalshi prices are 4-decimal strings, e.g. "0.5500".
+YES contract = over the floor_strike threshold for total-goals markets.
 Use price_to_decimal_odds() / decimal_odds_to_price() for conversion.
 """
 
@@ -24,10 +22,13 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+from pydantic import BaseModel, field_validator
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -45,6 +46,14 @@ DEFAULT_PEM_PATH = Path("data/kalshi_private_key.pem")
 # Kalshi EPL total goals series ticker
 KXEPLTOTAL_SERIES = "KXEPLTOTAL"
 
+# OU 2.5 floor_strike for filtering
+OU25_FLOOR_STRIKE = Decimal("2.5")
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
 
 class _KalshiCredentialError(Exception):
     """Raised at client init when required credentials are missing or unreadable."""
@@ -54,13 +63,93 @@ class _KalshiSigningError(Exception):
     """Raised when RSA signing fails (corrupted PEM, non-RSA key, runtime error)."""
 
 
+class _KalshiServerError(Exception):
+    """5xx response from Kalshi API — transient, retried by tenacity."""
+
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"Kalshi API {status}: {body[:200]}")
+        self.status = status
+
+
+class _KalshiAPIError(Exception):
+    """4xx response from Kalshi API — non-transient, not retried."""
+
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"Kalshi API {status}: {body[:200]}")
+        self.status = status
+
+
+# ---------------------------------------------------------------------------
+# Pydantic response models (shapes verified against demo capture 2026-05-12)
+# ---------------------------------------------------------------------------
+
+
+class KalshiEvent(BaseModel):
+    """One event from GET /events?series_ticker=KXEPLTOTAL."""
+
+    model_config = {"extra": "ignore"}
+
+    event_ticker: str
+    series_ticker: str
+    title: str
+    sub_title: str = ""
+    category: str = ""
+    last_updated_ts: str = ""
+
+
+class KalshiMarket(BaseModel):
+    """One market from GET /markets or GET /markets/<ticker>.
+
+    Monetary fields are Decimal (parsed from 4-decimal strings like "0.5500").
+    Size/liquidity fields are float (acceptable for intel only, not money math).
+    floor_strike is Decimal (may arrive as float 2.5 or string "2.5" from API).
+    """
+
+    model_config = {"extra": "ignore"}
+
+    ticker: str
+    event_ticker: str
+    floor_strike: Decimal
+    status: str = ""
+    title: str = ""
+    close_time: str = ""
+
+    # Price fields: API returns 4-decimal strings, e.g. "0.5500" or "0.0000"
+    yes_bid_dollars: Decimal = Decimal("0")
+    no_bid_dollars: Decimal = Decimal("0")
+    yes_ask_dollars: Decimal = Decimal("0")
+    no_ask_dollars: Decimal = Decimal("0")
+
+    # Size fields: API returns strings like "0.00"; float is acceptable for liquidity
+    yes_bid_size_fp: float = 0.0
+    yes_ask_size_fp: float = 0.0
+
+    @field_validator(
+        "floor_strike",
+        "yes_bid_dollars",
+        "no_bid_dollars",
+        "yes_ask_dollars",
+        "no_ask_dollars",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_decimal(cls, v: Any) -> Decimal:
+        return Decimal(str(v))
+
+    @field_validator("yes_bid_size_fp", "yes_ask_size_fp", mode="before")
+    @classmethod
+    def _coerce_float(cls, v: Any) -> float:
+        return float(v)
+
+
+# ---------------------------------------------------------------------------
+# Response wrapper
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True)
 class KalshiResponse:
-    """Wraps a Kalshi API payload with our wall-clock receipt timestamp.
-
-    Mirrors BetfairResponse so the orchestration layer can treat both
-    venue responses uniformly.
-    """
+    """Wraps a Kalshi API payload with wall-clock receipt timestamp."""
 
     payload: Any
     received_at: datetime
@@ -68,11 +157,16 @@ class KalshiResponse:
     staleness_seconds: int = 0
 
 
+# ---------------------------------------------------------------------------
+# Price helpers
+# ---------------------------------------------------------------------------
+
+
 def price_to_decimal_odds(yes_bid_dollars: float) -> float:
     """Convert a Kalshi YES bid price to decimal odds.
 
     Args:
-        yes_bid_dollars: Kalshi yes_bid_dollars field, a float in [0.01, 0.99].
+        yes_bid_dollars: Kalshi yes_bid_dollars field, a float in (0, 1).
             Represents the probability that the YES contract settles at $1.
 
     Returns:
@@ -101,13 +195,14 @@ def decimal_odds_to_price(odds: float) -> float:
     return round(max(0.01, min(0.99, raw)), 2)
 
 
+# ---------------------------------------------------------------------------
+# Client
+# ---------------------------------------------------------------------------
+
+
 @dataclass
 class KalshiClient:
-    """Kalshi Exchange API client stub.
-
-    All public methods raise NotImplementedError (Phase 3 step 5a). The
-    scaffolding (auth header construction, tenacity retry decorators, response
-    dataclass) is wired so step 5b only needs to fill in the HTTP call bodies.
+    """Kalshi Exchange API client with RSA-PSS/SHA256 per-request signing.
 
     Args:
         api_key_id: Kalshi key ID (KALSHI_API_KEY_ID env var).
@@ -124,11 +219,12 @@ class KalshiClient:
     transport: httpx.BaseTransport | None = None
     _private_key_pem: bytes = field(default=b"", init=False, repr=False)
     _signing_key: Any = field(default=None, init=False, repr=False)
+    _api_path_prefix: str = field(default="", init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._private_key_pem = self.private_key_pem
-        # _signing_key is loaded lazily on first _sign_request call so that
-        # clients constructed with stub/test PEM bytes don't fail at init.
+        # Compute API path prefix from base_url, e.g. "/trade-api/v2"
+        self._api_path_prefix = urlparse(self.base_url).path.rstrip("/")
 
     @classmethod
     def from_env(
@@ -136,6 +232,7 @@ class KalshiClient:
         *,
         pem_path: Path = DEFAULT_PEM_PATH,
         base_url: str = PROD_BASE_URL,
+        transport: httpx.BaseTransport | None = None,
     ) -> KalshiClient:
         """Construct from environment variables.
 
@@ -161,18 +258,19 @@ class KalshiClient:
                 "Generate an RSA key pair on the Kalshi dashboard and save "
                 "the private key to data/kalshi_private_key.pem (gitignored)."
             ) from exc
-        return cls(api_key_id=api_key_id, private_key_pem=pem_bytes, base_url=base_url)
+        return cls(
+            api_key_id=api_key_id,
+            private_key_pem=pem_bytes,
+            base_url=base_url,
+            transport=transport,
+        )
 
     # ------------------------------------------------------------------
-    # RSA-PSS signing (Phase 3 step 5b implementation)
+    # RSA-PSS signing
     # ------------------------------------------------------------------
 
     def _load_signing_key(self) -> None:
-        """Parse and cache the RSA private key from PEM bytes.
-
-        Called lazily by _sign_request on first use. Raises
-        _KalshiSigningError for corrupt PEM, empty bytes, or non-RSA keys.
-        """
+        """Parse and cache the RSA private key from PEM bytes (lazy on first use)."""
         from cryptography.exceptions import UnsupportedAlgorithm
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
@@ -202,13 +300,9 @@ class KalshiClient:
         Signing string: f"{timestamp_ms}{method}{path}" (method uppercase).
         Algorithm: RSA-PSS, SHA-256 digest, SHA-256 MGF1, salt=DIGEST_LENGTH.
 
-        Path is the full URL path including /trade-api/v2 prefix. The probe
-        script confirms whether Kalshi's demo endpoint agrees with this
-        assumption; adjust if discovery shows a shorter path is expected.
-
         Args:
             method: HTTP verb uppercase, e.g. "GET".
-            path: full URL path, e.g. "/trade-api/v2/events".
+            path: full URL path including /trade-api/v2 prefix.
             timestamp_ms: millisecond epoch timestamp.
 
         Returns:
@@ -242,10 +336,6 @@ class KalshiClient:
     def _signing_headers(self, method: str, path: str) -> dict[str, str]:
         """Build Kalshi auth headers for a single request.
 
-        Returns the three required Kalshi-specific headers plus Content-Type
-        and Accept. Use this with raw httpx calls; the stub public methods
-        (get_events etc.) still raise NotImplementedError until 5b-implementation.
-
         Args:
             method: HTTP verb uppercase, e.g. "GET".
             path: full URL path including /trade-api/v2 prefix.
@@ -253,9 +343,6 @@ class KalshiClient:
         Returns:
             Dict with KALSHI-ACCESS-KEY, KALSHI-ACCESS-TIMESTAMP,
             KALSHI-ACCESS-SIGNATURE, Content-Type, Accept.
-
-        Raises:
-            _KalshiSigningError: if signing fails.
         """
         ts_ms = int(datetime.now(tz=UTC).timestamp() * 1000)
         sig = self._sign_request(method, path, ts_ms)
@@ -268,15 +355,48 @@ class KalshiClient:
         }
 
     # ------------------------------------------------------------------
-    # Public API methods (bodies still raise NotImplementedError — 5b-impl)
+    # Internal HTTP helper
     # ------------------------------------------------------------------
+
+    def _get_json(
+        self,
+        path_suffix: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], datetime]:
+        """Make one signed GET request. Returns (json_body, received_at).
+
+        Raises:
+            _KalshiServerError: on 5xx (retried by tenacity).
+            _KalshiAPIError: on 4xx (not retried).
+            httpx.ConnectError / httpx.ReadTimeout: network failures (retried).
+        """
+        sign_path = f"{self._api_path_prefix}{path_suffix}"
+        url = f"{self.base_url.rstrip('/')}{path_suffix}"
+        headers = self._signing_headers("GET", sign_path)
+        received_at = datetime.now(tz=UTC)
+        with self._http() as http:
+            resp = http.get(url, headers=headers, params=params)
+        if resp.status_code >= 500:
+            raise _KalshiServerError(resp.status_code, resp.text)
+        if resp.status_code != 200:
+            raise _KalshiAPIError(resp.status_code, resp.text)
+        return resp.json(), received_at
+
+    def _http(self) -> httpx.Client:
+        return httpx.Client(timeout=DEFAULT_TIMEOUT, transport=self.transport)
+
+    # ------------------------------------------------------------------
+    # Public API methods
+    # ------------------------------------------------------------------
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=1, max=8),
-        retry=retry_if_exception_type(httpx.HTTPError),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, _KalshiServerError)),
         reraise=True,
     )
-    def get_events(
+    def list_events(
         self,
         *,
         series_ticker: str = KXEPLTOTAL_SERIES,
@@ -288,77 +408,83 @@ class KalshiClient:
         Args:
             series_ticker: Kalshi series ticker, e.g. "KXEPLTOTAL".
             status: event status filter ("open", "closed", "settled").
-            limit: max events to return (API max varies by tier).
+            limit: max events to return.
 
         Returns:
-            KalshiResponse with payload = list of event dicts from
-            GET /trade-api/v2/events?series_ticker=...
-
-        Raises:
-            NotImplementedError: until Phase 3 step 5b.
+            KalshiResponse with payload = list[KalshiEvent] from
+            GET /events?series_ticker=...&status=...&limit=...
         """
-        raise NotImplementedError("Kalshi RSA auth not yet implemented; see Phase 3 step 5b")
-        _ = series_ticker, status, limit  # noqa: F841
+        params = {
+            "series_ticker": series_ticker,
+            "status": status,
+            "limit": str(limit),
+        }
+        body, received_at = self._get_json("/events", params=params)
+        raw_events = body.get("events", [])
+        events = [KalshiEvent.model_validate(e) for e in raw_events]
+        return KalshiResponse(payload=events, received_at=received_at)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=1, max=8),
-        retry=retry_if_exception_type(httpx.HTTPError),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, _KalshiServerError)),
         reraise=True,
     )
-    def get_markets(
+    def list_markets(
         self,
         *,
         event_ticker: str,
         status: str = "open",
+        limit: int = 100,
+        floor_strike_filter: Decimal | None = None,
     ) -> KalshiResponse:
-        """List markets for a specific event.
+        """List markets for a specific event, optionally filtered by floor_strike.
+
+        The floor_strike filter is applied client-side (Kalshi REST API does not
+        expose a floor_strike query parameter).
 
         Args:
-            event_ticker: e.g. "kxepltotal-26may01leebur".
+            event_ticker: e.g. "KXEPLTOTAL-26MAY24WHULEE".
             status: market status filter.
+            limit: max markets to return.
+            floor_strike_filter: if provided, only markets with
+                floor_strike == floor_strike_filter are returned.
 
         Returns:
-            KalshiResponse with payload = list of market dicts from
-            GET /trade-api/v2/markets?event_ticker=...
-
-        Raises:
-            NotImplementedError: until Phase 3 step 5b.
+            KalshiResponse with payload = list[KalshiMarket] from
+            GET /markets?event_ticker=...
         """
-        raise NotImplementedError("Kalshi RSA auth not yet implemented; see Phase 3 step 5b")
-        _ = event_ticker, status  # noqa: F841
+        params = {
+            "event_ticker": event_ticker,
+            "status": status,
+            "limit": str(limit),
+        }
+        body, received_at = self._get_json("/markets", params=params)
+        raw_markets = body.get("markets", [])
+        markets = [KalshiMarket.model_validate(m) for m in raw_markets]
+        if floor_strike_filter is not None:
+            markets = [m for m in markets if m.floor_strike == floor_strike_filter]
+        return KalshiResponse(payload=markets, received_at=received_at)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=1, max=8),
-        retry=retry_if_exception_type(httpx.HTTPError),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, _KalshiServerError)),
         reraise=True,
     )
-    def get_market_orderbook(
-        self,
-        *,
-        ticker: str,
-        depth: int = 1,
-    ) -> KalshiResponse:
-        """Get order book depth for a single market ticker.
+    def get_market(self, ticker: str) -> KalshiResponse:
+        """Get a single market by ticker.
 
         Args:
-            ticker: Kalshi market ticker (e.g. "KXEPLTOTAL-26MAY01LEEBUR-T2.5").
-            depth: number of price levels to return.
+            ticker: Kalshi market ticker, e.g. "KXEPLTOTAL-26MAY24WHULEE-2".
 
         Returns:
-            KalshiResponse with payload = order book dict including
-            yes_bid_dollars, yes_ask_dollars, no_bid_dollars, no_ask_dollars,
-            volume_fp, open_interest_fp, yes_bid_size_fp, yes_ask_size_fp.
-
-        Raises:
-            NotImplementedError: until Phase 3 step 5b.
+            KalshiResponse with payload = KalshiMarket from
+            GET /markets/<ticker>
         """
-        raise NotImplementedError("Kalshi RSA auth not yet implemented; see Phase 3 step 5b")
-        _ = ticker, depth  # noqa: F841
-
-    def _http(self) -> httpx.Client:
-        return httpx.Client(timeout=DEFAULT_TIMEOUT, transport=self.transport)
+        body, received_at = self._get_json(f"/markets/{ticker}")
+        market = KalshiMarket.model_validate(body["market"])
+        return KalshiResponse(payload=market, received_at=received_at)
 
 
 if __name__ == "__main__":
@@ -367,5 +493,16 @@ if __name__ == "__main__":
     for p in examples:
         odds = price_to_decimal_odds(p)
         roundtrip = decimal_odds_to_price(odds)
-        print(f"  price={p:.2f} → odds={odds:.4f} → price_back={roundtrip:.2f}")
+        print(f"  price={p:.2f} -> odds={odds:.4f} -> price_back={roundtrip:.2f}")
     print("smoke: price_to_decimal_odds / decimal_odds_to_price OK")
+
+    # Smoke test: Pydantic model
+    m = KalshiMarket(
+        ticker="KXEPLTOTAL-26MAY24WHULEE-2",
+        event_ticker="KXEPLTOTAL-26MAY24WHULEE",
+        floor_strike="2.5",  # type: ignore[arg-type]
+        yes_bid_dollars="0.5500",  # type: ignore[arg-type]
+        no_bid_dollars="0.4500",  # type: ignore[arg-type]
+    )
+    print(f"  KalshiMarket: {m.ticker}, floor_strike={m.floor_strike}, yes_bid={m.yes_bid_dollars}")
+    print("smoke: KalshiMarket model_validate OK")
