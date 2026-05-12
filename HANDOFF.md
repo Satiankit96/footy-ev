@@ -8,6 +8,13 @@
 
 ---
 
+## 0. Mid-flight note
+
+**5b mid-flight — signing landed, discovery probe ready, shape verification pending operator-side demo run.**
+Run `uv run python scripts/probe_kalshi_demo.py` (see `docs/SETUP_GUIDE.md §5b`) and paste the capture file back into chat.
+
+---
+
 ## 1. Status banner
 
 We are at the **end of Phase 3 step 3**. The paper-trading vertical

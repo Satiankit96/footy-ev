@@ -67,6 +67,56 @@ $env:FOOTY_EV_KALSHI_LIVE = "1"
 # call. Skips cleanly if FOOTY_EV_KALSHI_LIVE or KALSHI_API_KEY_ID unset.
 ```
 
+### 5b. Shape discovery probe (run before parser implementation)
+
+Before the live parsers in `get_events` / `get_markets` can be written, the
+actual JSON field names from Kalshi's demo API must be confirmed. Run the
+discovery probe to capture real response shapes and surface any divergence
+from assumptions.
+
+**Prerequisites:** credentials configured (steps 2–3 above), demo environment.
+
+**Environment variables:**
+
+```powershell
+$env:KALSHI_API_BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
+$env:KALSHI_API_KEY_ID   = "<your-key-id-uuid>"
+# Optional — defaults to data/kalshi_private_key.pem:
+$env:KALSHI_PEM_PATH     = "data/kalshi_private_key.pem"
+```
+
+**Run:**
+
+```powershell
+uv run python scripts/probe_kalshi_demo.py
+```
+
+**Expected output (all 4 calls succeed):**
+
+```
+Probe target: https://demo-api.kalshi.co/trade-api/v2
+RSA signing: OK
+
+CALL 1: GET /series        → status 200, KXEPLTOTAL confirmed / not found
+CALL 2: GET /events        → status 200, event_ticker shape, first event detail
+CALL 3: GET /markets       → status 200, all market tickers, price field names
+CALL 4: GET /markets/<t>   → status 200, single-market detail
+
+Capture written to: tests/fixtures/kalshi_demo_capture_<YYYYMMDDTHHMMSSZ>.json
+```
+
+The script also checks clock skew (`Date` header vs. local UTC). If drift
+exceeds 30 seconds, RSA auth will fail with 401 in production — sync your
+system clock before proceeding.
+
+**Capture file location:** `tests/fixtures/kalshi_demo_capture_<ts>.json`
+(gitignored and claudeignored — never committed).
+
+**What to do next:** paste the full contents of the capture file into the
+chat and request "Phase 3 step 5b — parser implementation". Claude will lock
+the parsers in `get_events`, `get_markets`, and `get_market_orderbook` to
+the verified field names from the real response.
+
 ### 6. Start the paper trader (Kalshi, post step 5b)
 
 ```powershell
