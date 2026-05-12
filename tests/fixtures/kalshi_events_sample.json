@@ -1,0 +1,103 @@
+{
+  "events": [
+    {
+      "event_ticker": "KXEPLTOTAL-26MAY16ARSLIV",
+      "series_ticker": "KXEPLTOTAL",
+      "title": "Arsenal vs Liverpool - Total Goals",
+      "open_time": "2026-05-16T14:00:00Z",
+      "close_time": "2026-05-16T14:00:00Z",
+      "status": "open",
+      "category": "sports",
+      "markets": [
+        {
+          "ticker": "KXEPLTOTAL-26MAY16ARSLIV-T2.5",
+          "event_ticker": "KXEPLTOTAL-26MAY16ARSLIV",
+          "series_ticker": "KXEPLTOTAL",
+          "title": "Over/Under 2.5 Goals",
+          "subtitle": "Arsenal vs Liverpool",
+          "open_time": "2026-05-16T14:00:00Z",
+          "close_time": "2026-05-16T14:00:00Z",
+          "status": "open",
+          "yes_bid_dollars": 0.55,
+          "yes_ask_dollars": 0.57,
+          "no_bid_dollars": 0.43,
+          "no_ask_dollars": 0.45,
+          "last_price_dollars": 0.56,
+          "volume_fp": 12500.5,
+          "open_interest_fp": 8900.0,
+          "yes_bid_size_fp": 200.0,
+          "yes_ask_size_fp": 180.0,
+          "previous_yes_bid_dollars": 0.54,
+          "previous_yes_ask_dollars": 0.56,
+          "settlement_value_dollars": null
+        }
+      ]
+    },
+    {
+      "event_ticker": "KXEPLTOTAL-26MAY16MCICHE",
+      "series_ticker": "KXEPLTOTAL",
+      "title": "Manchester City vs Chelsea - Total Goals",
+      "open_time": "2026-05-16T16:30:00Z",
+      "close_time": "2026-05-16T16:30:00Z",
+      "status": "open",
+      "category": "sports",
+      "markets": [
+        {
+          "ticker": "KXEPLTOTAL-26MAY16MCICHE-T2.5",
+          "event_ticker": "KXEPLTOTAL-26MAY16MCICHE",
+          "series_ticker": "KXEPLTOTAL",
+          "title": "Over/Under 2.5 Goals",
+          "subtitle": "Manchester City vs Chelsea",
+          "open_time": "2026-05-16T16:30:00Z",
+          "close_time": "2026-05-16T16:30:00Z",
+          "status": "open",
+          "yes_bid_dollars": 0.62,
+          "yes_ask_dollars": 0.64,
+          "no_bid_dollars": 0.36,
+          "no_ask_dollars": 0.38,
+          "last_price_dollars": 0.63,
+          "volume_fp": 9800.0,
+          "open_interest_fp": 6200.0,
+          "yes_bid_size_fp": 150.0,
+          "yes_ask_size_fp": 140.0,
+          "previous_yes_bid_dollars": 0.60,
+          "previous_yes_ask_dollars": 0.62,
+          "settlement_value_dollars": null
+        }
+      ]
+    },
+    {
+      "event_ticker": "KXEPLTOTAL-26MAY23TOTMAN",
+      "series_ticker": "KXEPLTOTAL",
+      "title": "Tottenham vs Manchester United - Total Goals",
+      "open_time": "2026-05-23T14:00:00Z",
+      "close_time": "2026-05-23T14:00:00Z",
+      "status": "open",
+      "category": "sports",
+      "markets": [
+        {
+          "ticker": "KXEPLTOTAL-26MAY23TOTMAN-T2.5",
+          "event_ticker": "KXEPLTOTAL-26MAY23TOTMAN",
+          "series_ticker": "KXEPLTOTAL",
+          "title": "Over/Under 2.5 Goals",
+          "subtitle": "Tottenham vs Manchester United",
+          "open_time": "2026-05-23T14:00:00Z",
+          "close_time": "2026-05-23T14:00:00Z",
+          "status": "open",
+          "yes_bid_dollars": 0.48,
+          "yes_ask_dollars": 0.50,
+          "no_bid_dollars": 0.50,
+          "no_ask_dollars": 0.52,
+          "last_price_dollars": 0.49,
+          "volume_fp": 7400.0,
+          "open_interest_fp": 4100.0,
+          "yes_bid_size_fp": 100.0,
+          "yes_ask_size_fp": 110.0,
+          "previous_yes_bid_dollars": 0.47,
+          "previous_yes_ask_dollars": 0.49,
+          "settlement_value_dollars": null
+        }
+      ]
+    }
+  ]
+}
