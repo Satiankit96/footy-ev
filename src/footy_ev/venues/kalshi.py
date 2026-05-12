@@ -39,7 +39,7 @@ from tenacity import (
 _LOG = logging.getLogger(__name__)
 
 DEMO_BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
-PROD_BASE_URL = "https://trading-api.kalshi.com/trade-api/v2"
+PROD_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2"
 DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=15.0, pool=5.0)
 DEFAULT_PEM_PATH = Path("data/kalshi_private_key.pem")
 
