@@ -319,10 +319,13 @@ def main() -> None:
         from footy_ev.venues.kalshi import KalshiClient
 
         client = KalshiClient.from_env()
-        # This raises NotImplementedError until Phase 3 step 5b
-        resp = client.get_events(series_ticker="KXEPLTOTAL")
-        payload = resp.payload
-        events: list[dict[str, Any]] = payload if isinstance(payload, list) else []
+        resp = client.list_events(series_ticker="KXEPLTOTAL")
+        events_models = resp.payload if isinstance(resp.payload, list) else []
+        # Convert KalshiEvent objects to dicts compatible with _process_from_fixture
+        events: list[dict[str, Any]] = [
+            {"event_ticker": e.event_ticker, "title": e.title, "open_time": ""}
+            for e in events_models
+        ]
     else:
         fixture_path: Path = args.from_fixture
         if not fixture_path.exists():
