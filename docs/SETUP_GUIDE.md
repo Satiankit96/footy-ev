@@ -9,10 +9,10 @@ exchange and the only legal venue for EPL total-goals contracts in the US.
 Betfair Exchange is not accessible from the US; see the deprecated Betfair
 section below if you need it for reference.
 
-**Current status:** Phase 3 step 5a ships the venue plumbing. Step 5b wires
-the real RSA-PSS/SHA256 auth. Until step 5b is complete, the paper-trader
-will trip the circuit breaker immediately with a clear `NotImplementedError`
-message — this is the intended fail-fast behavior.
+**Current status:** Phase 3 step 5b complete. RSA-PSS/SHA256 auth is wired.
+`KalshiClient.list_events()`, `list_markets()`, and `get_market()` are fully
+implemented with Pydantic-validated response models and tenacity retry.
+The paper-trader can now fetch real odds from Kalshi demo / production.
 
 ### 1. Create a Kalshi account
 
@@ -56,72 +56,41 @@ from footy_ev.venues.kalshi import KalshiClient, DEMO_BASE_URL
 client = KalshiClient.from_env(base_url=DEMO_BASE_URL)
 ```
 
-### 5. Live integration test (Phase 3 step 5b only)
-
-After RSA auth is wired in step 5b:
+### 5. Live integration test
 
 ```powershell
-$env:FOOTY_EV_KALSHI_LIVE = "1"
+$env:FOOTY_EV_KALSHI_DEMO = "1"
 .\make.ps1 test-integration
-# tests/integration/test_kalshi_live.py runs a single read-only get_events
-# call. Skips cleanly if FOOTY_EV_KALSHI_LIVE or KALSHI_API_KEY_ID unset.
+# tests/integration/test_kalshi_live.py runs read-only list_events and
+# list_markets calls. Skips cleanly if FOOTY_EV_KALSHI_DEMO or
+# KALSHI_API_KEY_ID are unset.
 ```
 
-### 5b. Shape discovery probe (run before parser implementation)
+### 5b. Shape discovery probe (completed — 2026-05-12)
 
-Before the live parsers in `get_events` / `get_markets` can be written, the
-actual JSON field names from Kalshi's demo API must be confirmed. Run the
-discovery probe to capture real response shapes and surface any divergence
-from assumptions.
+The discovery probe (`scripts/probe_kalshi_demo.py`) was run against the
+Kalshi demo API. Key findings locked into the implementation:
 
-**Prerequisites:** credentials configured (steps 2–3 above), demo environment.
+- **Event tickers:** `KXEPLTOTAL-26MAY24WHULEE` (series + date + TEAMTEAM)
+- **Market tickers:** `KXEPLTOTAL-26MAY24WHULEE-2` (event + sequential int)
+- **`floor_strike`:** float in JSON (e.g. `2.5`) — OU 2.5 filter uses exact Decimal comparison
+- **Price fields:** 4-decimal strings, e.g. `"0.5500"` / `"0.0000"` (no-bid)
+- **Size fields:** strings, e.g. `"50.00"` (coerced to float by Pydantic)
+- **Events endpoint:** does NOT embed markets — markets must be fetched separately
 
-**Environment variables:**
+Re-run the probe at any time to verify field shapes still match:
 
 ```powershell
 $env:KALSHI_API_BASE_URL = "https://demo-api.kalshi.co/trade-api/v2"
 $env:KALSHI_API_KEY_ID   = "<your-key-id-uuid>"
-# Optional — defaults to data/kalshi_private_key.pem:
-$env:KALSHI_PEM_PATH     = "data/kalshi_private_key.pem"
-```
-
-**Run:**
-
-```powershell
 uv run python scripts/probe_kalshi_demo.py
 ```
 
-**Expected output (all 4 calls succeed):**
-
-```
-Probe target: https://demo-api.kalshi.co/trade-api/v2
-RSA signing: OK
-
-CALL 1: GET /series        → status 200, KXEPLTOTAL confirmed / not found
-CALL 2: GET /events        → status 200, event_ticker shape, first event detail
-CALL 3: GET /markets       → status 200, all market tickers, price field names
-CALL 4: GET /markets/<t>   → status 200, single-market detail
-
-Capture written to: tests/fixtures/kalshi_demo_capture_<YYYYMMDDTHHMMSSZ>.json
-```
-
-The script also checks clock skew (`Date` header vs. local UTC). If drift
-exceeds 30 seconds, RSA auth will fail with 401 in production — sync your
-system clock before proceeding.
-
-**Capture file location:** `tests/fixtures/kalshi_demo_capture_<ts>.json`
-(gitignored and claudeignored — never committed).
-
-**What to do next:** paste the full contents of the capture file into the
-chat and request "Phase 3 step 5b — parser implementation". Claude will lock
-the parsers in `get_events`, `get_markets`, and `get_market_orderbook` to
-the verified field names from the real response.
-
-### 6. Start the paper trader (Kalshi, post step 5b)
+### 6. Start the paper trader (Kalshi)
 
 ```powershell
-python run.py paper-trade --once --venue kalshi
-python run.py paper-trade --fixtures-ahead-days 7 --venue kalshi
+python run.py paper-trade --once
+python run.py paper-trade --fixtures-ahead-days 7
 ```
 
 ---
