@@ -50,6 +50,10 @@ class _KalshiCredentialError(Exception):
     """Raised at client init when required credentials are missing or unreadable."""
 
 
+class _KalshiSigningError(Exception):
+    """Raised when RSA signing fails (corrupted PEM, non-RSA key, runtime error)."""
+
+
 @dataclass(frozen=True)
 class KalshiResponse:
     """Wraps a Kalshi API payload with our wall-clock receipt timestamp.
@@ -97,47 +101,6 @@ def decimal_odds_to_price(odds: float) -> float:
     return round(max(0.01, min(0.99, raw)), 2)
 
 
-def _sign_request(
-    private_key_pem: bytes,
-    method: str,
-    path: str,
-    timestamp_ms: int,
-) -> str:
-    """Produce the base64-encoded RSA-PSS/SHA256 signature for a Kalshi request.
-
-    Signing string: f"{timestamp_ms}{METHOD}{path}"
-    Algorithm: RSA-PSS, SHA-256 digest, SHA-256 MGF.
-
-    NOTE (Phase 3 step 5a): this function body raises NotImplementedError.
-    Step 5b wires the actual cryptography call here.
-
-    Args:
-        private_key_pem: raw bytes of the PEM-encoded RSA private key.
-        method: HTTP verb uppercase, e.g. "GET".
-        path: URL path without host, e.g. "/trade-api/v2/events".
-        timestamp_ms: millisecond epoch timestamp.
-
-    Returns:
-        Base64-encoded signature string for the KALSHI-ACCESS-SIGNATURE header.
-    """
-    raise NotImplementedError(
-        "Kalshi RSA-PSS signing not yet implemented; see Phase 3 step 5b. "
-        "Install cryptography>=42 and implement using "
-        "cryptography.hazmat.primitives.asymmetric.padding.PSS."
-    )
-    # Step 5b implementation outline:
-    #   from cryptography.hazmat.primitives import hashes, serialization
-    #   from cryptography.hazmat.primitives.asymmetric import padding
-    #   private_key = serialization.load_pem_private_key(private_key_pem, password=None)
-    #   message = f"{timestamp_ms}{method.upper()}{path}".encode()
-    #   sig = private_key.sign(message, padding.PSS(
-    #       mgf=padding.MGF1(hashes.SHA256()),
-    #       salt_length=padding.PSS.MAX_LENGTH,
-    #   ), hashes.SHA256())
-    #   return base64.b64encode(sig).decode()
-    _ = private_key_pem, method, path, timestamp_ms, base64  # noqa: F841
-
-
 @dataclass
 class KalshiClient:
     """Kalshi Exchange API client stub.
@@ -160,9 +123,12 @@ class KalshiClient:
     staleness_limit_sec: int = 300
     transport: httpx.BaseTransport | None = None
     _private_key_pem: bytes = field(default=b"", init=False, repr=False)
+    _signing_key: Any = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._private_key_pem = self.private_key_pem
+        # _signing_key is loaded lazily on first _sign_request call so that
+        # clients constructed with stub/test PEM bytes don't fail at init.
 
     @classmethod
     def from_env(
@@ -198,25 +164,111 @@ class KalshiClient:
         return cls(api_key_id=api_key_id, private_key_pem=pem_bytes, base_url=base_url)
 
     # ------------------------------------------------------------------
-    # Auth header construction (step 5b wires the real signature here)
+    # RSA-PSS signing (Phase 3 step 5b implementation)
     # ------------------------------------------------------------------
-    def _auth_headers(self, method: str, path: str) -> dict[str, str]:
+
+    def _load_signing_key(self) -> None:
+        """Parse and cache the RSA private key from PEM bytes.
+
+        Called lazily by _sign_request on first use. Raises
+        _KalshiSigningError for corrupt PEM, empty bytes, or non-RSA keys.
+        """
+        from cryptography.exceptions import UnsupportedAlgorithm
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+
+        if not self._private_key_pem:
+            raise _KalshiSigningError(
+                "private_key_pem is empty — cannot sign Kalshi requests. "
+                "Provide a valid RSA PEM via from_env() or the constructor."
+            )
+        try:
+            key = serialization.load_pem_private_key(self._private_key_pem, password=None)
+        except (ValueError, TypeError, UnsupportedAlgorithm) as exc:
+            raise _KalshiSigningError(
+                f"Cannot load RSA private key from PEM: {exc}. "
+                "Check data/kalshi_private_key.pem is a valid RSA private key."
+            ) from exc
+        if not isinstance(key, RSAPrivateKey):
+            raise _KalshiSigningError(
+                f"PEM key is not RSA (got {type(key).__name__}). "
+                "Kalshi requires RSA keypairs generated on the Kalshi dashboard."
+            )
+        self._signing_key = key
+
+    def _sign_request(self, method: str, path: str, timestamp_ms: int) -> str:
+        """Produce the base64-encoded RSA-PSS/SHA256 signature for one request.
+
+        Signing string: f"{timestamp_ms}{method}{path}" (method uppercase).
+        Algorithm: RSA-PSS, SHA-256 digest, SHA-256 MGF1, salt=DIGEST_LENGTH.
+
+        Path is the full URL path including /trade-api/v2 prefix. The probe
+        script confirms whether Kalshi's demo endpoint agrees with this
+        assumption; adjust if discovery shows a shorter path is expected.
+
+        Args:
+            method: HTTP verb uppercase, e.g. "GET".
+            path: full URL path, e.g. "/trade-api/v2/events".
+            timestamp_ms: millisecond epoch timestamp.
+
+        Returns:
+            Base64-encoded ASCII signature string.
+
+        Raises:
+            _KalshiSigningError: if PEM is invalid or signing fails.
+        """
+        if self._signing_key is None:
+            self._load_signing_key()
+        key = self._signing_key
+        assert key is not None  # _load_signing_key raises on failure; never returns None
+
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+
+        message = f"{timestamp_ms}{method}{path}".encode()
+        try:
+            sig: bytes = key.sign(
+                message,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.DIGEST_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _KalshiSigningError(f"RSA signing failed: {exc}") from exc
+        return base64.b64encode(sig).decode("ascii")
+
+    def _signing_headers(self, method: str, path: str) -> dict[str, str]:
         """Build Kalshi auth headers for a single request.
 
-        Raises NotImplementedError until step 5b fills in _sign_request().
+        Returns the three required Kalshi-specific headers plus Content-Type
+        and Accept. Use this with raw httpx calls; the stub public methods
+        (get_events etc.) still raise NotImplementedError until 5b-implementation.
+
+        Args:
+            method: HTTP verb uppercase, e.g. "GET".
+            path: full URL path including /trade-api/v2 prefix.
+
+        Returns:
+            Dict with KALSHI-ACCESS-KEY, KALSHI-ACCESS-TIMESTAMP,
+            KALSHI-ACCESS-SIGNATURE, Content-Type, Accept.
+
+        Raises:
+            _KalshiSigningError: if signing fails.
         """
         ts_ms = int(datetime.now(tz=UTC).timestamp() * 1000)
-        sig = _sign_request(self._private_key_pem, method, path, ts_ms)
+        sig = self._sign_request(method, path, ts_ms)
         return {
             "KALSHI-ACCESS-KEY": self.api_key_id,
-            "KALSHI-ACCESS-SIGNATURE": sig,
             "KALSHI-ACCESS-TIMESTAMP": str(ts_ms),
+            "KALSHI-ACCESS-SIGNATURE": sig,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
 
     # ------------------------------------------------------------------
-    # Public API methods (all stub out to NotImplementedError)
+    # Public API methods (bodies still raise NotImplementedError — 5b-impl)
     # ------------------------------------------------------------------
     @retry(
         stop=stop_after_attempt(3),
