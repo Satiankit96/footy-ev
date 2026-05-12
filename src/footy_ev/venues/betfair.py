@@ -1,5 +1,14 @@
-"""Betfair Exchange Delayed-API client (Phase 3 step 1).
+"""Betfair Exchange Delayed-API client — DEPRECATED as of Phase 3 step 5a.
 
+DEPRECATED: The operator is US-based (NY) and Betfair Exchange is not
+legally accessible from the US. This module is retained for reference and
+backward compatibility only. The active venue is Kalshi (see venues/kalshi.py).
+
+Do NOT add Betfair as a dependency in new code. Betfair credentials
+(BETFAIR_APP_KEY, BETFAIR_USERNAME, BETFAIR_PASSWORD) are no longer
+required in .env. This module will be removed in Phase 3 step 6.
+
+--- Original docstring ---
 Free-tier "Delayed Application Key" only. The Delayed key is rate-limited
 and returns market data with an approximate one-minute lag — adequate for
 paper trading and CLV measurement against Betfair SP, not for in-running
@@ -83,7 +92,7 @@ class BetfairClient:
     # ------------------------------------------------------------------
     # Auth
     # ------------------------------------------------------------------
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=1, max=8),
         retry=retry_if_exception_type((httpx.HTTPError, BetfairAuthError)),
@@ -187,7 +196,7 @@ class BetfairClient:
     # ------------------------------------------------------------------
     # HTTP plumbing
     # ------------------------------------------------------------------
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(min=1, max=8),
         retry=retry_if_exception_type(httpx.HTTPError),
