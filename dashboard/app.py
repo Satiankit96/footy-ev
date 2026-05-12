@@ -728,6 +728,42 @@ def _page_paper_trading() -> None:
 
     st.divider()
 
+    # -- Kalshi venue panels --------------------------------------------------
+    st.subheader("Kalshi venue")
+
+    commission = queries.commission_summary()
+    kcols = st.columns(3)
+    kcols[0].metric("Commission", commission["commission_pct_display"])
+    kcols[1].caption(commission["note"])
+
+    kalshi_res = queries.kalshi_event_resolutions_summary(get_con())
+    if kalshi_res["n_total"] == 0:
+        st.info(
+            "No Kalshi event resolutions today. "
+            "Step 5b will wire RSA auth; until then the scraper node trips the circuit breaker "
+            "with a clear NotImplementedError message."
+        )
+    else:
+        kr_cols = st.columns(3)
+        kr_cols[0].metric("Kalshi events today", kalshi_res["n_total"])
+        kr_cols[1].metric("Resolved", f"{kalshi_res['pct_resolved']:.0f}%")
+        kr_cols[2].metric("Unresolved", kalshi_res["n_unresolved"])
+
+    st.caption("Kalshi order book (live data available after Phase 3 step 5b):")
+    order_book = queries.kalshi_order_book_stub(get_con())
+    if order_book.is_empty():
+        st.info("No Kalshi order book data yet.")
+    else:
+        st.dataframe(order_book.to_pandas(), use_container_width=True)
+
+    st.divider()
+    st.subheader("Bets by venue")
+    by_venue = queries.paper_bets_by_venue(get_con())
+    if not by_venue.is_empty():
+        st.dataframe(by_venue.to_pandas(), use_container_width=True)
+
+    st.divider()
+
     st.subheader("Production model")
     model_info = queries.production_model_info(get_con())
     if model_info is None:

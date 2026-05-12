@@ -724,3 +724,110 @@ def betfair_team_aliases_count(con: duckdb.DuckDBPyConnection) -> int:
     """Total rows in betfair_team_aliases."""
     row = con.execute("SELECT COUNT(*) FROM betfair_team_aliases").fetchone()
     return int(row[0]) if row else 0
+
+
+# ---------------------------------------------------------------------------
+# Kalshi venue panels (Phase 3 step 5a — stubs until step 5b wires real auth)
+# ---------------------------------------------------------------------------
+
+
+def paper_bets_by_venue(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
+    """Count of paper_bets grouped by venue and settlement_status."""
+    return con.execute(
+        """
+        SELECT COALESCE(venue, 'unknown') AS venue,
+               settlement_status,
+               COUNT(*) AS n_bets,
+               SUM(stake_gbp) AS total_stake_gbp,
+               SUM(COALESCE(pnl_gbp, 0)) AS total_pnl_gbp
+        FROM paper_bets
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+        """
+    ).pl()
+
+
+def kalshi_event_resolutions_summary(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+    """Kalshi event resolution summary: today's events by status.
+
+    Returns counts for resolved / unresolved and the ratio for the operator
+    to judge whether bootstrap_kalshi_aliases.py needs to be run.
+    """
+    counts_row = con.execute(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'resolved')   AS n_resolved,
+            COUNT(*) FILTER (WHERE status = 'unresolved') AS n_unresolved,
+            COUNT(*) AS n_total
+        FROM kalshi_contract_resolutions
+        WHERE CAST(resolved_at AS DATE) = CURRENT_DATE
+        """
+    ).fetchone()
+    n_resolved = int(counts_row[0]) if counts_row else 0
+    n_unresolved = int(counts_row[1]) if counts_row else 0
+    n_total = int(counts_row[2]) if counts_row else 0
+
+    return {
+        "n_resolved": n_resolved,
+        "n_unresolved": n_unresolved,
+        "n_total": n_total,
+        "pct_resolved": round(100.0 * n_resolved / n_total, 1) if n_total > 0 else 0.0,
+    }
+
+
+def kalshi_order_book_stub(
+    con: duckdb.DuckDBPyConnection,
+    fixture_id: str | None = None,
+) -> pl.DataFrame:
+    """Kalshi order book stub — returns latest live_odds_snapshots for venue='kalshi'.
+
+    When KalshiClient is fully implemented (Phase 3 step 5b), this will show
+    real-time bid/ask depth. Until then it surfaces whatever snapshots the
+    scraper has written to live_odds_snapshots.
+
+    Args:
+        con: DuckDB connection.
+        fixture_id: optional filter; if None returns all Kalshi snapshots.
+
+    Returns:
+        DataFrame with columns: fixture_id, market, selection, odds_decimal,
+        liquidity_gbp, received_at.
+    """
+    params: list[Any] = ["kalshi"]
+    fixture_filter = ""
+    if fixture_id:
+        fixture_filter = "AND fixture_id = ?"
+        params.append(fixture_id)
+
+    return con.execute(
+        f"""
+        SELECT fixture_id, market, selection,
+               odds_decimal, liquidity_gbp, received_at
+        FROM live_odds_snapshots
+        WHERE venue = ? {fixture_filter}
+        ORDER BY received_at DESC NULLS LAST
+        LIMIT 50
+        """,
+        params,
+    ).pl()
+
+
+def commission_summary(commission_pct: float = 0.07) -> dict[str, Any]:
+    """Return commission parameters for display on the dashboard.
+
+    Phase 3 step 5a uses a placeholder rate. Step 5b should wire the live
+    Kalshi fee schedule.
+
+    Args:
+        commission_pct: Kalshi take rate (default 0.07 = 7%).
+
+    Returns:
+        Dict with commission_pct and net_edge_multiplier.
+    """
+    net_edge_multiplier = 1.0 - commission_pct
+    return {
+        "commission_pct": commission_pct,
+        "commission_pct_display": f"{commission_pct * 100:.1f}%",
+        "net_edge_multiplier": net_edge_multiplier,
+        "note": "Placeholder rate (Phase 3 step 5a). Verify against Kalshi fee schedule.",
+    }
