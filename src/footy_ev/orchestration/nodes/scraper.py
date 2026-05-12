@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 import duckdb
 
 from footy_ev.orchestration.state import BettingState, MarketType, OddsSnapshot
-from footy_ev.venues.kalshi import KalshiClient, price_to_decimal_odds
+from footy_ev.venues.kalshi import (
+    OU25_FLOOR_STRIKE,
+    KalshiClient,
+    KalshiMarket,
+    price_to_decimal_odds,
+)
 from footy_ev.venues.resolution import cache_kalshi_resolution, resolve_kalshi_market
 
 _LOG = logging.getLogger(__name__)
@@ -30,11 +36,12 @@ def scraper_node(
 ) -> dict[str, Any]:
     """Pull odds from Kalshi and resolve events to warehouse fixture_ids.
 
-    Calls client.get_events() for KXEPLTOTAL series, then for each event
-    calls client.get_market_orderbook() and resolves the event ticker to a
-    warehouse fixture_id via kalshi_event_aliases. Unresolved events are
-    dropped. More than RESOLUTION_FAILURE_THRESHOLD fraction failing trips
-    the circuit breaker.
+    Two-call flow per event:
+    1. list_events(series_ticker="KXEPLTOTAL") → event tickers
+    2. list_markets(event_ticker=..., floor_strike_filter=2.5) → OU 2.5 market
+
+    Unresolved events are dropped. More than RESOLUTION_FAILURE_THRESHOLD
+    fraction failing trips the circuit breaker.
 
     Args:
         state: current BettingState.
@@ -42,7 +49,7 @@ def scraper_node(
         con: warehouse connection. Required for entity resolution.
     """
     try:
-        resp = client.get_events(series_ticker="KXEPLTOTAL")
+        events_resp = client.list_events(series_ticker="KXEPLTOTAL")
     except NotImplementedError as exc:
         return {
             "odds_snapshots": [],
@@ -60,10 +67,10 @@ def scraper_node(
             "resolved_fixture_ids": [],
             "data_freshness_seconds": {},
             "circuit_breaker_tripped": True,
-            "breaker_reason": f"Kalshi get_events failed: {type(exc).__name__}: {exc}",
+            "breaker_reason": f"Kalshi list_events failed: {type(exc).__name__}: {exc}",
         }
 
-    events: list[dict[str, Any]] = resp.payload if isinstance(resp.payload, list) else []
+    events = events_resp.payload if isinstance(events_resp.payload, list) else []
     new_snapshots: list[OddsSnapshot] = []
     resolved_fixture_ids: list[str] = []
     freshness: dict[str, int] = {}
@@ -71,7 +78,11 @@ def scraper_node(
     resolution_failures = 0
 
     for event in events:
-        event_ticker = str(event.get("event_ticker", ""))
+        # Support both KalshiEvent objects and raw dicts (test compatibility)
+        if hasattr(event, "event_ticker"):
+            event_ticker = str(event.event_ticker)
+        else:
+            event_ticker = str(event.get("event_ticker", ""))
         if not event_ticker:
             continue
 
@@ -88,8 +99,21 @@ def scraper_node(
         else:
             fixture_id = event_ticker  # fallback when no warehouse connection
 
-        for market in event.get("markets", []):
-            snaps = _extract_kalshi_snapshot(market, fixture_id, resp.received_at)
+        # Fetch OU 2.5 market for this event
+        try:
+            markets_resp = client.list_markets(
+                event_ticker=event_ticker,
+                floor_strike_filter=OU25_FLOOR_STRIKE,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _LOG.warning("scraper[kalshi]: list_markets failed for %s: %s", event_ticker, exc)
+            if con is not None:
+                resolution_failures += 1
+            continue
+
+        markets = markets_resp.payload if isinstance(markets_resp.payload, list) else []
+        for market in markets:
+            snaps = _extract_kalshi_snapshot(market, fixture_id, events_resp.received_at)
             if snaps:
                 new_snapshots.extend(snaps)
                 freshness[f"kalshi:{fixture_id}"] = 0
@@ -121,63 +145,79 @@ def scraper_node(
 
 
 def _extract_kalshi_snapshot(
-    market: dict[str, Any],
+    market: KalshiMarket,
     fixture_id: str,
     captured_at: datetime,
 ) -> list[OddsSnapshot]:
-    """Build OddsSnapshots (over + under) from one Kalshi market dict.
+    """Build OddsSnapshots (over + under) from one Kalshi market.
 
-    Reads yes_bid_dollars / no_bid_dollars (string cents, e.g. "0.5500").
-    Returns empty list when fields are absent or prices are out of range.
+    Reads yes_bid_dollars / no_bid_dollars (Decimal, parsed from 4-decimal
+    strings like "0.5500"). Returns empty list when prices are absent or
+    outside the tradeable range (0, 1) exclusive — e.g. "0.0000" no-bid.
+
+    Args:
+        market: parsed KalshiMarket from the REST API.
+        fixture_id: warehouse fixture identifier.
+        captured_at: wall-clock time the events list was received.
+
+    Returns:
+        List of OddsSnapshot (0, 1, or 2 elements).
     """
-    yes_bid = market.get("yes_bid_dollars")
-    no_bid = market.get("no_bid_dollars")
-    if yes_bid is None or no_bid is None:
-        return []
-    try:
-        yes_bid_f = float(yes_bid)
-        no_bid_f = float(no_bid)
-    except (TypeError, ValueError):
-        return []
-    if not (0.0 < yes_bid_f < 1.0) or not (0.0 < no_bid_f < 1.0):
-        return []
+    yes_bid = market.yes_bid_dollars
+    no_bid = market.no_bid_dollars
 
-    yes_size = market.get("yes_bid_size_fp")
-    no_size = market.get("no_bid_size_fp")
+    _ZERO = Decimal("0")
+    _ONE = Decimal("1")
 
     snapshots: list[OddsSnapshot] = []
-    try:
-        yes_odds = price_to_decimal_odds(yes_bid_f)
-        snapshots.append(
-            OddsSnapshot(
-                venue="kalshi",
-                fixture_id=fixture_id,
-                market=MarketType.OU_25,
-                selection=_KALSHI_YES_SELECTION,
-                odds_decimal=yes_odds,
-                captured_at=captured_at.astimezone(UTC),
-                staleness_seconds=0,
-                liquidity_gbp=float(yes_size) if yes_size is not None else None,
+
+    if _ZERO < yes_bid < _ONE:
+        try:
+            yes_odds = price_to_decimal_odds(float(yes_bid))
+            snapshots.append(
+                OddsSnapshot(
+                    venue="kalshi",
+                    fixture_id=fixture_id,
+                    market=MarketType.OU_25,
+                    selection=_KALSHI_YES_SELECTION,
+                    odds_decimal=yes_odds,
+                    captured_at=captured_at.astimezone(UTC),
+                    staleness_seconds=0,
+                    liquidity_gbp=market.yes_bid_size_fp or None,
+                )
             )
+        except (ValueError, ZeroDivisionError):
+            pass
+    else:
+        _LOG.debug(
+            "scraper[kalshi]: market %s has no active yes_bid (%s) — over snapshot skipped",
+            market.ticker,
+            yes_bid,
         )
-    except (ValueError, ZeroDivisionError):
-        pass
-    try:
-        no_odds = price_to_decimal_odds(no_bid_f)
-        snapshots.append(
-            OddsSnapshot(
-                venue="kalshi",
-                fixture_id=fixture_id,
-                market=MarketType.OU_25,
-                selection=_KALSHI_NO_SELECTION,
-                odds_decimal=no_odds,
-                captured_at=captured_at.astimezone(UTC),
-                staleness_seconds=0,
-                liquidity_gbp=float(no_size) if no_size is not None else None,
+
+    if _ZERO < no_bid < _ONE:
+        try:
+            no_odds = price_to_decimal_odds(float(no_bid))
+            snapshots.append(
+                OddsSnapshot(
+                    venue="kalshi",
+                    fixture_id=fixture_id,
+                    market=MarketType.OU_25,
+                    selection=_KALSHI_NO_SELECTION,
+                    odds_decimal=no_odds,
+                    captured_at=captured_at.astimezone(UTC),
+                    staleness_seconds=0,
+                    liquidity_gbp=None,  # no_bid_size not exposed by Kalshi REST API
+                )
             )
+        except (ValueError, ZeroDivisionError):
+            pass
+    else:
+        _LOG.debug(
+            "scraper[kalshi]: market %s has no active no_bid (%s) — under snapshot skipped",
+            market.ticker,
+            no_bid,
         )
-    except (ValueError, ZeroDivisionError):
-        pass
 
     return snapshots
 
