@@ -57,27 +57,41 @@ def warehouse(tmp_path: Path) -> duckdb.DuckDBPyConnection:
 
 def _make_kalshi_mock_not_implemented() -> MagicMock:
     client = MagicMock()
-    client.get_events.side_effect = NotImplementedError("parsers not yet wired")
+    client.list_events.side_effect = NotImplementedError("parsers not yet wired")
     return client
 
 
 def _make_kalshi_mock_with_events() -> MagicMock:
     """Returns a mock that provides one event with favourable odds."""
+    from decimal import Decimal
+
+    from footy_ev.venues.kalshi import KalshiEvent, KalshiMarket
+
     client = MagicMock()
     now = datetime.now(tz=UTC)
-    client.get_events.return_value = KalshiResponse(
+    client.list_events.return_value = KalshiResponse(
         payload=[
-            {
-                "event_ticker": _EVENT_TICKER,
-                "markets": [
-                    {
-                        "yes_bid_dollars": "0.6000",  # p=0.60 → decimal 1/0.60 ≈ 1.67
-                        "no_bid_dollars": "0.4000",
-                        "yes_bid_size_fp": "50.00",
-                        "no_bid_size_fp": "50.00",
-                    }
-                ],
-            }
+            KalshiEvent(
+                event_ticker=_EVENT_TICKER,
+                series_ticker="KXEPLTOTAL",
+                title="Arsenal vs Liverpool: Total Goals",
+            )
+        ],
+        received_at=now,
+        staleness_seconds=0,
+    )
+    # p=0.60 → decimal 1/0.60 ≈ 1.67
+    client.list_markets.return_value = KalshiResponse(
+        payload=[
+            KalshiMarket(
+                ticker=f"{_EVENT_TICKER}-2",
+                event_ticker=_EVENT_TICKER,
+                floor_strike=Decimal("2.5"),
+                yes_bid_dollars=Decimal("0.6000"),
+                no_bid_dollars=Decimal("0.4000"),
+                yes_bid_size_fp=50.0,
+                yes_ask_size_fp=50.0,
+            )
         ],
         received_at=now,
         staleness_seconds=0,
