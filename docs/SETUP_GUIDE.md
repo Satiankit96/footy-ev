@@ -2,7 +2,84 @@
 
 Operator-facing setup steps that aren't fully automated by the code.
 
-## Betfair Exchange — Delayed Application Key (free tier)
+## Kalshi Exchange (PRIMARY VENUE — Phase 3 step 5a+)
+
+The operator is US-based (NY). Kalshi is a CFTC-regulated prediction market
+exchange and the only legal venue for EPL total-goals contracts in the US.
+Betfair Exchange is not accessible from the US; see the deprecated Betfair
+section below if you need it for reference.
+
+**Current status:** Phase 3 step 5a ships the venue plumbing. Step 5b wires
+the real RSA-PSS/SHA256 auth. Until step 5b is complete, the paper-trader
+will trip the circuit breaker immediately with a clear `NotImplementedError`
+message — this is the intended fail-fast behavior.
+
+### 1. Create a Kalshi account
+
+1. Go to [kalshi.com](https://kalshi.com/) and register. The account is free.
+   No deposit is required for paper trading.
+2. Complete identity verification (KYC) — required for all CFTC-regulated
+   exchanges even without depositing.
+
+### 2. Generate an API keypair
+
+1. Sign in → **Settings** → **API Keys** → **Create API Key**.
+2. Select RSA key type. Kalshi generates a keypair; download the private key
+   PEM file immediately (it is not stored server-side).
+3. Copy the **Key ID** (UUID format, e.g. `a1b2c3d4-...`).
+
+### 3. Store credentials
+
+```powershell
+# Place the private key PEM in the gitignored/claudeignored path:
+Copy-Item "~/Downloads/kalshi_private_key.pem" "data/kalshi_private_key.pem"
+```
+
+In `.env` (copy from `.env.example`):
+```env
+KALSHI_API_KEY_ID=<paste-your-key-id-uuid-here>
+```
+
+Confirm the key is not tracked by git:
+```powershell
+git check-ignore data/kalshi_private_key.pem
+# should print: data/kalshi_private_key.pem
+```
+
+### 4. Demo environment (recommended first)
+
+Kalshi provides a demo environment at `demo-api.kalshi.co` for testing
+without real money. The `KalshiClient` accepts a `base_url` parameter:
+
+```python
+from footy_ev.venues.kalshi import KalshiClient, DEMO_BASE_URL
+client = KalshiClient.from_env(base_url=DEMO_BASE_URL)
+```
+
+### 5. Live integration test (Phase 3 step 5b only)
+
+After RSA auth is wired in step 5b:
+
+```powershell
+$env:FOOTY_EV_KALSHI_LIVE = "1"
+.\make.ps1 test-integration
+# tests/integration/test_kalshi_live.py runs a single read-only get_events
+# call. Skips cleanly if FOOTY_EV_KALSHI_LIVE or KALSHI_API_KEY_ID unset.
+```
+
+### 6. Start the paper trader (Kalshi, post step 5b)
+
+```powershell
+python run.py paper-trade --once --venue kalshi
+python run.py paper-trade --fixtures-ahead-days 7 --venue kalshi
+```
+
+---
+
+## Betfair Exchange — DEPRECATED (US operator cannot use Betfair legally)
+
+Retained for reference only. The operator is NY-based; Betfair is not
+US-legal. Do not configure Betfair for new setups.
 
 The paper-trading runtime in [`runtime/paper_trader.py`](../src/footy_ev/runtime/paper_trader.py)
 needs three things from Betfair: an account (free), a Delayed Application
