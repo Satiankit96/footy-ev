@@ -84,4 +84,27 @@ FROM base b
 LEFT JOIN v_understat_matches u
     ON CAST(u.kickoff_local AS DATE) = b.match_date
    AND u.home_team_id = b.home_team_id
-   AND u.away_team_id = b.away_team_id;
+   AND u.away_team_id = b.away_team_id
+
+UNION ALL
+
+-- Synthetic fixtures derived from Kalshi events (see migration 013).
+-- Inserted by scripts/bootstrap_kalshi_aliases.py when ticker+team resolution
+-- succeeds but no raw_match_results row matches yet.
+SELECT
+    s.fixture_id,
+    s.league,
+    s.season,
+    s.home_team_id,
+    s.away_team_id,
+    NULL                  AS home_team_raw,
+    NULL                  AS away_team_raw,
+    s.match_date,
+    s.kickoff_utc,
+    NULL                  AS home_score_ft,
+    NULL                  AS away_score_ft,
+    NULL                  AS result_ft,
+    NULL                  AS home_xg,
+    NULL                  AS away_xg,
+    s.status
+FROM synthetic_fixtures s;
