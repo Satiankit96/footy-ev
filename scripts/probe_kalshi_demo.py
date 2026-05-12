@@ -195,7 +195,7 @@ def main() -> int:  # noqa: PLR0912, PLR0915
     print("=" * 60)
     print("CALL 1: GET /series")
     print("=" * 60)
-    status, hdrs, payload = _get(client, base_url, "/series")
+    status, hdrs, payload = _get(client, base_url, "/series", params={"limit": "200"})
     print(f"Status: {status}")
     _check_clock_skew(
         httpx.Response(status, headers=hdrs),
@@ -214,9 +214,11 @@ def main() -> int:  # noqa: PLR0912, PLR0915
                 ]
                 print(f"  Series tickers: {tickers[:20]}")
                 if KXEPLTOTAL_SERIES in tickers:
-                    print(f"  ✓ {KXEPLTOTAL_SERIES} found in series catalog")
+                    print(f"  [OK] {KXEPLTOTAL_SERIES} found in series catalog")
                 else:
-                    print(f"  ✗ {KXEPLTOTAL_SERIES} NOT found. Available: {tickers}")
+                    print(
+                        f"  [NOT FOUND] {KXEPLTOTAL_SERIES} not in page 1 ({len(tickers)} series shown). Available: {tickers}"
+                    )
     else:
         print(f"Response body: {json.dumps(payload, indent=2, default=str)[:500]}")
         success = False

@@ -28,7 +28,7 @@ def _prob(p_cal: float = 0.55) -> ModelProbability:
 
 def _snap(odds: float = 2.05) -> OddsSnapshot:
     return OddsSnapshot(
-        venue="betfair_exchange",
+        venue="kalshi",
         fixture_id="ARS-LIV",
         market=MarketType.OU_25,
         selection="over",
@@ -92,7 +92,7 @@ def test_decision_id_is_deterministic() -> None:
         kelly_fraction_used=0.005,
         stake_gbp=__import__("decimal").Decimal("5.00"),
         bankroll_used=__import__("decimal").Decimal("1000.00"),
-        venue="betfair_exchange",
+        venue="kalshi",
         decided_at=datetime(2026, 5, 6, 22, 0, 0, tzinfo=UTC),
         features_hash="abc",
     )

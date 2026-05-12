@@ -1,13 +1,7 @@
-"""Paper-trading runtime.
-
-Default venue is Kalshi (US-legal, NY operator). Betfair is no longer the
-default — see docs/SETUP_GUIDE.md for Kalshi onboarding (Phase 3 step 5b
-wires real RSA auth; until then the Kalshi client raises NotImplementedError
-and the graph trips the circuit breaker immediately, which is the intended
-fail-fast behavior).
+"""Paper-trading runtime — Kalshi venue (US-legal, NY operator).
 
 This module is the only place that knows how to talk to all three external
-systems at once (venue API, the warehouse, the SQLite checkpoint store).
+systems at once (Kalshi API, the warehouse, the SQLite checkpoint store).
 Every other module stays narrow and testable.
 """
 
@@ -21,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import duckdb
 
@@ -37,8 +31,7 @@ from footy_ev.orchestration.graph import (
     compile_graph,
 )
 from footy_ev.orchestration.state import BettingState
-from footy_ev.venues import BetfairClient, KalshiClient
-from footy_ev.venues.kalshi import _KalshiCredentialError
+from footy_ev.venues.kalshi import KalshiClient, _KalshiCredentialError
 
 _LOG = logging.getLogger(__name__)
 DEFAULT_DB_PATH = Path("data/warehouse/footy_ev.duckdb")
@@ -46,10 +39,8 @@ DEFAULT_TICK_SECONDS = 300
 DEFAULT_BANKROLL = 1000.0
 DEFAULT_EDGE_THRESHOLD = 0.03
 DEFAULT_FIXTURES_AHEAD_DAYS = 7
-DEFAULT_VENUE: Literal["betfair_exchange", "kalshi"] = "kalshi"
-EPL_COUNTRY_CODE = "GB"
 _MODEL_RUN_ID_ENV = "PAPER_TRADER_MODEL_RUN_ID"
-COMMISSION_PCT = 0.07  # Kalshi placeholder (phase 3 step 5a); replace with live rate
+COMMISSION_PCT = 0.07  # Kalshi placeholder; replace with live rate once confirmed
 
 
 @dataclass
@@ -61,7 +52,6 @@ class PaperTraderConfig:
     db_path: Path = field(default_factory=lambda: DEFAULT_DB_PATH)
     checkpoint_path: Path = field(default_factory=lambda: DEFAULT_CHECKPOINT_PATH)
     model_run_id: str | None = None
-    venue: Literal["betfair_exchange", "kalshi"] = DEFAULT_VENUE
 
 
 def _open_warehouse(db_path: Path) -> duckdb.DuckDBPyConnection:
@@ -72,108 +62,39 @@ def _open_warehouse(db_path: Path) -> duckdb.DuckDBPyConnection:
     return con
 
 
-def _build_client_from_env(
-    venue: Literal["betfair_exchange", "kalshi"],
-) -> BetfairClient | KalshiClient:
-    """Construct the venue client from environment variables.
+def _build_client_from_env() -> KalshiClient:
+    """Construct KalshiClient from environment variables.
 
-    Kalshi path: reads KALSHI_API_KEY_ID + data/kalshi_private_key.pem.
-    Betfair path: reads BETFAIR_APP_KEY, BETFAIR_USERNAME, BETFAIR_PASSWORD.
+    Reads KALSHI_API_KEY_ID and data/kalshi_private_key.pem (default path,
+    overridden by KALSHI_PEM_PATH).
 
     Raises:
-        RuntimeError: if required env vars are missing.
-        _KalshiCredentialError: if Kalshi PEM is unreadable.
+        RuntimeError: if credentials are missing or the PEM is unreadable.
     """
-    if venue == "kalshi":
-        try:
-            return KalshiClient.from_env()
-        except _KalshiCredentialError as exc:
-            raise RuntimeError(str(exc)) from exc
-
-    # Betfair path (deprecated for US operator)
-    app_key = os.environ.get("BETFAIR_APP_KEY")
-    username = os.environ.get("BETFAIR_USERNAME")
-    password = os.environ.get("BETFAIR_PASSWORD")
-    missing = [
-        name
-        for name, value in [
-            ("BETFAIR_APP_KEY", app_key),
-            ("BETFAIR_USERNAME", username),
-            ("BETFAIR_PASSWORD", password),
-        ]
-        if not value
-    ]
-    if missing:
-        raise RuntimeError(
-            f"missing required env vars for paper trader: {', '.join(missing)}. "
-            "See docs/SETUP_GUIDE.md."
-        )
-    assert app_key is not None and username is not None and password is not None
-    return BetfairClient(app_key=app_key, username=username, password=password)
-
-
-def _resolve_betfair_fixtures(
-    betfair: BetfairClient, days_ahead: int
-) -> tuple[list[str], dict[str, list[str]], dict[str, dict[str, Any]]]:
-    """Returns (betfair_event_ids, market_id_map, event_meta_map).
-
-    Used when venue='betfair_exchange'. Kalshi path discovers events directly
-    via KalshiClient.get_events() inside the scraper node.
-    """
-    events_resp = betfair.list_events(country_codes=[EPL_COUNTRY_CODE], days_ahead=days_ahead)
-    event_ids: list[str] = []
-    event_meta: dict[str, dict[str, Any]] = {}
-    if isinstance(events_resp.payload, list):
-        for entry in events_resp.payload:
-            ev = entry.get("event") if isinstance(entry, dict) else None
-            if not ev:
-                continue
-            eid = ev.get("id")
-            if eid:
-                eid_str = str(eid)
-                event_ids.append(eid_str)
-                event_meta[eid_str] = {
-                    "name": ev.get("name", ""),
-                    "openDate": ev.get("openDate", ""),
-                    "countryCode": ev.get("countryCode", ""),
-                }
-    if not event_ids:
-        return [], {}, {}
-
-    cat_resp = betfair.list_market_catalogue(event_ids=event_ids, market_types=["OVER_UNDER_25"])
-    market_map: dict[str, list[str]] = {}
-    if isinstance(cat_resp.payload, list):
-        for market in cat_resp.payload:
-            if not isinstance(market, dict):
-                continue
-            ev = market.get("event") or {}
-            event_id = str(ev.get("id", ""))
-            market_id = market.get("marketId")
-            if event_id and market_id:
-                market_map.setdefault(event_id, []).append(str(market_id))
-
-    fixture_ids = list(market_map.keys())
-    return fixture_ids, market_map, event_meta
+    try:
+        return KalshiClient.from_env()
+    except _KalshiCredentialError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def run_once(
     cfg: PaperTraderConfig,
     *,
-    client: BetfairClient | KalshiClient | None = None,
+    client: KalshiClient | None = None,
     score_fn: Callable[..., list[dict[str, Any]]] | None = None,
     warehouse_con: duckdb.DuckDBPyConnection | None = None,
 ) -> dict[str, Any]:
-    """Single-pass: resolve fixtures, run the graph, persist summary.
+    """Single-pass: run the graph once, persist summary.
 
-    For the Kalshi venue (default), fixture discovery happens inside the
-    scraper node via KalshiClient.get_events(). Until Phase 3 step 5b is
-    complete, this will trip the circuit breaker immediately with a clear
+    Fixture discovery happens inside the scraper node via
+    KalshiClient.get_events(). Until Phase 3 step 5b parsers are wired,
+    this trips the circuit breaker immediately with a clear
     NotImplementedError message — that is the intended fail-fast behavior.
 
     Returns a small dict suitable for `run.py paper-trade --once` output.
     """
     started_at = datetime.now(tz=UTC)
-    venue_client = client or _build_client_from_env(cfg.venue)
+    venue_client = client or _build_client_from_env()
     con = warehouse_con or _open_warehouse(cfg.db_path)
 
     effective_score_fn = score_fn
@@ -196,29 +117,14 @@ def run_once(
                 "Run `python run.py canonical` to generate a qualifying XGBoost backtest."
             )
 
-    # For Betfair, resolve fixture list upfront via listEvents + listMarketCatalogue.
-    # For Kalshi, fixture discovery is done inside the scraper node via get_events().
-    if cfg.venue == "betfair_exchange":
-        fixture_ids, market_map, event_meta = _resolve_betfair_fixtures(
-            venue_client,
-            cfg.fixtures_ahead_days,
-        )
-    else:
-        # Kalshi: scraper discovers events internally; start with empty fixture list.
-        fixture_ids = []
-        market_map = None
-        event_meta = None
-
+    # Kalshi: scraper discovers events internally via get_events().
+    fixture_ids: list[str] = []
     invocation_id = make_invocation_id(fixture_ids, started_at)
 
     g = build_graph(
-        betfair=venue_client if cfg.venue == "betfair_exchange" else None,
-        kalshi=venue_client if cfg.venue == "kalshi" else None,
-        market_id_map=market_map,
-        event_meta_map=event_meta,
+        kalshi=venue_client,
         score_fn=effective_score_fn,
         warehouse_con=con,
-        venue=cfg.venue,
     )
     compiled, sqlite_conn = compile_graph(g, checkpoint_path=cfg.checkpoint_path)
 
@@ -267,7 +173,7 @@ def run_once(
         log_circuit_breaker(
             con,
             reason=breaker_reason or "unknown",
-            affected_source=cfg.venue,
+            affected_source="kalshi",
             tripped_at=completed_at,
         )
 
@@ -278,20 +184,19 @@ def run_once(
         "n_approved": len(approved),
         "breaker_tripped": breaker_tripped,
         "last_error": last_error,
-        "venue": cfg.venue,
+        "venue": "kalshi",
     }
 
 
 def run_forever(cfg: PaperTraderConfig) -> None:
     """Blocking loop. Ctrl-C to stop. Re-uses venue client session across ticks."""
-    venue_client = _build_client_from_env(cfg.venue)
+    venue_client = _build_client_from_env()
     while True:
         try:
             summary = run_once(cfg, client=venue_client)
             _LOG.info(
-                "paper-trade tick: venue=%s invocation=%s fixtures=%d "
+                "paper-trade tick: venue=kalshi invocation=%s fixtures=%d "
                 "candidates=%d approved=%d breaker=%s",
-                summary["venue"],
                 summary["invocation_id"],
                 summary["n_fixtures"],
                 summary["n_candidates"],

@@ -126,7 +126,10 @@ python run.py paper-trade --fixtures-ahead-days 7 --venue kalshi
 
 ---
 
-## Betfair Exchange — DEPRECATED (US operator cannot use Betfair legally)
+## Betfair Exchange — REMOVED
+
+Betfair is not US-legal (operator is NY-based) and has been fully removed
+from this codebase. Do not configure Betfair for any setup.
 
 Retained for reference only. The operator is NY-based; Betfair is not
 US-legal. Do not configure Betfair for new setups.

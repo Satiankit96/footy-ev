@@ -12,8 +12,7 @@ Settlement logic:
   5. Write settlement results back to paper_bets.
 
 Venue-agnostic: the same outcome logic applies to Kalshi YES/NO contracts
-and Betfair Exchange bets because both map to the same internal market/selection
-keys (ou_2.5 / over / under).
+because they map to the same internal market/selection keys (ou_2.5 / over / under).
 
 Run after each scraper tick or as a daily job.
 """

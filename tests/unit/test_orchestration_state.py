@@ -23,7 +23,7 @@ def test_market_type_values():
 
 def test_odds_snapshot_round_trip():
     snap = OddsSnapshot(
-        venue="betfair_exchange",
+        venue="kalshi",
         fixture_id="ARS-LIV",
         market=MarketType.OU_25,
         selection="over",
@@ -61,7 +61,7 @@ def test_bet_decision_decimal_stake():
         kelly_fraction_used=0.005,
         stake_gbp=Decimal("12.34"),
         bankroll_used=Decimal("1000.00"),
-        venue="betfair_exchange",
+        venue="kalshi",
         decided_at=datetime.now(tz=UTC),
         features_hash="abc123",
     )
@@ -74,7 +74,7 @@ def test_circuit_breaker_event():
         event_id="evt1",
         tripped_at=datetime.now(tz=UTC),
         reason="stale_odds",
-        affected_source="betfair_exchange",
+        affected_source="kalshi",
         max_staleness_sec=520,
     )
     assert e.max_staleness_sec == 520

@@ -39,8 +39,8 @@ def backfill_clv(
 
     Args:
         con: open DuckDB connection (read+write).
-        venue: primary venue to look up in live_odds_snapshots ("kalshi"
-               or "betfair_exchange"). Pinnacle is always tried as fallback.
+        venue: primary venue to look up in live_odds_snapshots ("kalshi").
+               Pinnacle is always tried as fallback.
         dry_run: if True, print what would be updated without writing.
 
     Returns:

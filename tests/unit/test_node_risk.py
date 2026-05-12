@@ -21,7 +21,7 @@ def _candidate(p_cal: float = 0.55, odds: float = 2.05) -> BetDecision:
         kelly_fraction_used=0.0,
         stake_gbp=Decimal("0.00"),
         bankroll_used=Decimal("0.00"),
-        venue="betfair_exchange",
+        venue="kalshi",
         decided_at=datetime.now(tz=UTC),
         features_hash="abc",
     )

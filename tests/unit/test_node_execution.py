@@ -32,7 +32,7 @@ def _approved() -> BetDecision:
         kelly_fraction_used=0.005,
         stake_gbp=Decimal("5.00"),
         bankroll_used=Decimal("1000.00"),
-        venue="betfair_exchange",
+        venue="kalshi",
         decided_at=datetime(2026, 5, 6, 22, 0, 0, tzinfo=UTC),
         features_hash="abc123",
         run_id=None,
