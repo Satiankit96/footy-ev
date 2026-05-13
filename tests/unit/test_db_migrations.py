@@ -23,6 +23,8 @@ def test_apply_migrations_creates_expected_tables() -> None:
         "009_paper_trading.sql",
         "010_betfair_entity_resolution.sql",
         "011_kalshi_entities.sql",
+        "012_kalshi_team_codes.sql",
+        "013_synthetic_fixtures.sql",
     ]
 
     tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
@@ -54,6 +56,7 @@ def test_apply_migrations_creates_expected_tables() -> None:
         "betfair_event_resolutions",
         "kalshi_event_aliases",
         "kalshi_contract_resolutions",
+        "synthetic_fixtures",
     }.issubset(tables)
 
     # Migration 006: market column present in CLV / calibration / reliability tables.

@@ -73,8 +73,10 @@ def test_no_business_logic_imported_inline():
     # Must delegate, not redefine
     assert "from footy_ev.backtest.walkforward import" in src
     assert "from footy_ev.eval.cli import evaluate_run" in src
-    # Sanity: keep the file lean
-    assert len(src.splitlines()) <= 290, "run.py should stay thin"
+    # Sanity: keep the file lean. Bumped from 290 -> 320 in Phase 3 step 5c to
+    # accommodate cycle/loop/bootstrap/status subcommands; pipeline-state logic
+    # was moved to footy_ev.runtime.status to preserve the thin-dispatcher rule.
+    assert len(src.splitlines()) <= 320, "run.py should stay thin"
 
 
 def test_dashboard_path_is_absolute_and_relative_to_script(monkeypatch):
