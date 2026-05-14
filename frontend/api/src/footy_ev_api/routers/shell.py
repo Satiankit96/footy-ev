@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from footy_ev_api.auth import get_current_operator, get_kalshi_base_url
+from footy_ev_api.jobs.manager import JobManager
 from footy_ev_api.schemas.shell import (
     CircuitBreakerInfo,
     PipelineInfo,
@@ -30,6 +31,8 @@ async def shell(
     else:
         venue = VenueInfo(name="not configured", base_url="", is_demo=False)
 
+    mgr = JobManager()
+
     return ShellResponse(
         operator="operator",
         venue=venue,
@@ -39,7 +42,7 @@ async def shell(
             reason=None,
         ),
         pipeline=PipelineInfo(
-            loop_active=False,
-            last_cycle_at=None,
+            loop_active=mgr.loop_active,
+            last_cycle_at=mgr.loop_state.get("last_cycle_at"),
         ),
     )
