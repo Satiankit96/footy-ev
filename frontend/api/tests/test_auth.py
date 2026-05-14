@@ -28,7 +28,8 @@ def test_auth_login_failure():
     c = _client()
     r = c.post("/api/v1/auth/login", json={"token": "wrong-token"})
     assert r.status_code == 401
-    assert r.json()["ok"] is False
+    body = r.json()
+    assert body["error"]["code"] == "INVALID_TOKEN"
     assert "session" not in r.cookies
 
 

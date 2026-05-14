@@ -40,7 +40,7 @@ describe("CircuitBreakerLED", () => {
   it("shows green dot when OK", () => {
     render(
       <TooltipProvider>
-        <CircuitBreakerLED breaker={{ state: "ok", reason: null }} />
+        <CircuitBreakerLED breaker={{ state: "ok", reason: null, last_tripped_at: null }} />
       </TooltipProvider>,
     );
     const led = screen.getByLabelText("Circuit breaker OK");
@@ -52,7 +52,7 @@ describe("CircuitBreakerLED", () => {
     render(
       <TooltipProvider>
         <CircuitBreakerLED
-          breaker={{ state: "tripped", reason: "stale data" }}
+          breaker={{ state: "tripped", reason: "stale data", last_tripped_at: null }}
         />
       </TooltipProvider>,
     );
