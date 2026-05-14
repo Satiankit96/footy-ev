@@ -103,6 +103,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pipeline/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pipeline Status
+         * @description Current pipeline state: last cycle, breaker, freshness.
+         */
+        get: operations["pipeline_status_api_v1_pipeline_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/cycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Cycle
+         * @description Start one pipeline cycle. 409 if already running.
+         */
+        post: operations["start_cycle_api_v1_pipeline_cycle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/loop/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Loop
+         * @description Start the polling loop. 409 if already active.
+         */
+        post: operations["start_loop_api_v1_pipeline_loop_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/loop/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Loop
+         * @description Stop the polling loop. Idempotent.
+         */
+        post: operations["stop_loop_api_v1_pipeline_loop_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/loop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loop State
+         * @description Current loop state.
+         */
+        get: operations["loop_state_api_v1_pipeline_loop_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/freshness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Freshness
+         * @description Per-source freshness gauges.
+         */
+        get: operations["freshness_api_v1_pipeline_freshness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Jobs
+         * @description List recent jobs.
+         */
+        get: operations["list_jobs_api_v1_pipeline_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipeline/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job
+         * @description Single job detail.
+         */
+        get: operations["get_job_api_v1_pipeline_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -118,6 +278,22 @@ export interface components {
             last_tripped_at: string | null;
             /** Reason */
             reason: string | null;
+        };
+        /**
+         * FreshnessEntry
+         * @description Per-source freshness gauge.
+         */
+        FreshnessEntry: {
+            /** Source */
+            source: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Age Seconds */
+            age_seconds: number | null;
+            /** Threshold Seconds */
+            threshold_seconds: number;
+            /** Status */
+            status: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -137,6 +313,38 @@ export interface components {
             uptime_s: number;
             /** Active Venue */
             active_venue?: string | null;
+        };
+        /**
+         * JobListResponse
+         * @description GET /api/v1/pipeline/jobs response.
+         */
+        JobListResponse: {
+            /** Jobs */
+            jobs: components["schemas"]["JobResponse"][];
+        };
+        /**
+         * JobResponse
+         * @description Single job detail.
+         */
+        JobResponse: {
+            /** Job Id */
+            job_id: string;
+            /** Job Type */
+            job_type: string;
+            /** Status */
+            status: string;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /** Duration S */
+            duration_s: number | null;
+            /** Error */
+            error: string | null;
+            /** Progress */
+            progress: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * LoginRequest
@@ -163,6 +371,22 @@ export interface components {
             ok: boolean;
         };
         /**
+         * LoopStateResponse
+         * @description Pipeline polling loop state.
+         */
+        LoopStateResponse: {
+            /** Active */
+            active: boolean;
+            /** Interval Min */
+            interval_min: number | null;
+            /** Started At */
+            started_at: string | null;
+            /** Last Cycle At */
+            last_cycle_at: string | null;
+            /** Cycles Completed */
+            cycles_completed: number;
+        };
+        /**
          * MeResponse
          * @description GET /api/v1/auth/me response.
          */
@@ -183,6 +407,22 @@ export interface components {
             last_cycle_at: string | null;
         };
         /**
+         * PipelineStatusResponse
+         * @description GET /api/v1/pipeline/status response.
+         */
+        PipelineStatusResponse: {
+            /** Last Cycle At */
+            last_cycle_at: string | null;
+            /** Last Cycle Duration S */
+            last_cycle_duration_s: number | null;
+            circuit_breaker: components["schemas"]["CircuitBreakerInfo"];
+            loop: components["schemas"]["LoopStateResponse"];
+            /** Freshness */
+            freshness: {
+                [key: string]: components["schemas"]["FreshnessEntry"];
+            };
+        };
+        /**
          * ShellResponse
          * @description GET /api/v1/shell response.
          */
@@ -192,6 +432,42 @@ export interface components {
             venue: components["schemas"]["VenueInfo"];
             circuit_breaker: components["schemas"]["CircuitBreakerInfo"];
             pipeline: components["schemas"]["PipelineInfo"];
+        };
+        /**
+         * StartCycleResponse
+         * @description POST /api/v1/pipeline/cycle response.
+         */
+        StartCycleResponse: {
+            /** Job Id */
+            job_id: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * StartLoopRequest
+         * @description POST /api/v1/pipeline/loop/start request body.
+         */
+        StartLoopRequest: {
+            /** Interval Min */
+            interval_min: number;
+        };
+        /**
+         * StartLoopResponse
+         * @description POST /api/v1/pipeline/loop/start response.
+         */
+        StartLoopResponse: {
+            /** Loop Id */
+            loop_id: string;
+            /** Interval Min */
+            interval_min: number;
+        };
+        /**
+         * StopLoopResponse
+         * @description POST /api/v1/pipeline/loop/stop response.
+         */
+        StopLoopResponse: {
+            /** Ok */
+            ok: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -349,6 +625,265 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShellResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pipeline_status_api_v1_pipeline_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_cycle_api_v1_pipeline_cycle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartCycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_loop_api_v1_pipeline_loop_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartLoopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartLoopResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_loop_api_v1_pipeline_loop_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StopLoopResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    loop_state_api_v1_pipeline_loop_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    freshness_api_v1_pipeline_freshness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["FreshnessEntry"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_jobs_api_v1_pipeline_jobs_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_v1_pipeline_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobResponse"];
                 };
             };
             /** @description Validation Error */

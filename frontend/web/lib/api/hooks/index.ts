@@ -11,3 +11,20 @@ export type {
   CircuitBreakerInfo,
   PipelineInfo,
 } from "./use-shell";
+
+export {
+  usePipelineStatus,
+  usePipelineLoop,
+  usePipelineJobs,
+  useStartCycle,
+  useStartLoop,
+  useStopLoop,
+} from "./use-pipeline";
+export type {
+  PipelineStatusResponse,
+  LoopStateResponse,
+  StartCycleResponse,
+  JobResponse,
+  JobListResponse,
+  FreshnessEntry,
+} from "./use-pipeline";
