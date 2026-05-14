@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "types:gen": "echo OpenAPI codegen wired in stage 2"
+    "types:gen": "npx tsx scripts/generate-api-types.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -51,9 +51,11 @@
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
     "msw": "^2.14.6",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.6"
   }
