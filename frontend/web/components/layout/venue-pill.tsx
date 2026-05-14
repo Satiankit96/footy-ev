@@ -1,12 +1,8 @@
 "use client";
 
-interface VenueData {
-  name: string;
-  base_url: string;
-  is_demo: boolean;
-}
+import type { VenueInfo } from "@/lib/api/hooks";
 
-export function VenuePill({ venue }: { venue: VenueData | null }) {
+export function VenuePill({ venue }: { venue: VenueInfo | null }) {
   if (!venue || venue.name === "not configured") {
     return (
       <span className="rounded-full bg-muted px-3 py-1 font-mono text-xs text-muted-foreground">

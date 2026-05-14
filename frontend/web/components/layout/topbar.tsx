@@ -10,13 +10,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useShell, useMe } from "@/lib/api/hooks";
 import { VenuePill } from "./venue-pill";
 import { CircuitBreakerLED } from "./circuit-breaker-led";
-
-interface ShellData {
-  venue: { name: string; base_url: string; is_demo: boolean } | null;
-  circuit_breaker: { state: string; reason: string | null } | null;
-}
 
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard",
@@ -35,10 +31,12 @@ const ROUTE_TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
-export function Topbar({ shell }: { shell: ShellData | null }) {
+export function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { data: shell } = useShell();
+  const { data: me } = useMe();
 
   const title = ROUTE_TITLES[pathname] ?? pathname.slice(1);
 
@@ -72,6 +70,11 @@ export function Topbar({ shell }: { shell: ShellData | null }) {
             <User className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {me && (
+              <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                {me.operator}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={handleSignOut}>
               Sign out
             </DropdownMenuItem>

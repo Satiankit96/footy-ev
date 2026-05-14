@@ -5,13 +5,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { CircuitBreakerInfo } from "@/lib/api/hooks";
 
-interface BreakerState {
-  state: string;
-  reason: string | null;
-}
-
-export function CircuitBreakerLED({ breaker }: { breaker: BreakerState | null }) {
+export function CircuitBreakerLED({ breaker }: { breaker: CircuitBreakerInfo | null }) {
   const isOk = !breaker || breaker.state === "ok";
   const tooltipText = isOk
     ? "Circuit breaker OK"
