@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const queryClient = new QueryClient({
@@ -18,7 +19,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          {children}
+          <Toaster richColors position="bottom-right" />
+        </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
