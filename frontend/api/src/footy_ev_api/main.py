@@ -6,9 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from footy_ev_api.errors import AppError, app_error_handler
+from footy_ev_api.jobs.manager import JobManager
 from footy_ev_api.routers.auth import router as auth_router
 from footy_ev_api.routers.health import router as health_router
+from footy_ev_api.routers.pipeline import router as pipeline_router
 from footy_ev_api.routers.shell import router as shell_router
+from footy_ev_api.ws.pipeline import sync_broadcast, ws_freshness, ws_pipeline
 
 
 def create_app() -> FastAPI:
@@ -31,6 +34,14 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1/auth")
     app.include_router(shell_router, prefix="/api/v1")
+    app.include_router(pipeline_router, prefix="/api/v1")
+
+    app.websocket("/ws/v1/pipeline")(ws_pipeline)
+    app.websocket("/ws/v1/freshness")(ws_freshness)
+
+    mgr = JobManager()
+    mgr.set_broadcast(sync_broadcast)
+
     return app
 
 
