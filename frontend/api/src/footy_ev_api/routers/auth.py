@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Cookie, Depends, Response
-from pydantic import BaseModel
 
 from footy_ev_api.auth import (
     create_session_jwt,
@@ -13,28 +12,27 @@ from footy_ev_api.auth import (
     get_current_operator,
     verify_operator_token,
 )
+from footy_ev_api.errors import AppError
+from footy_ev_api.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    LogoutResponse,
+    MeResponse,
+)
 from footy_ev_api.settings import Settings
 
 router = APIRouter(tags=["auth"])
 
 
-class LoginRequest(BaseModel):
-    """Operator token submission."""
-
-    token: str
-
-
-@router.post("/login")
-async def login(body: LoginRequest, response: Response) -> dict[str, bool]:
+@router.post("/login", response_model=LoginResponse)
+async def login(body: LoginRequest, response: Response) -> LoginResponse:
     """Validate operator token. Sets HttpOnly session cookie on success."""
     settings = Settings()
     if not settings.ui_operator_token:
-        response.status_code = 401
-        return {"ok": False}
+        raise AppError("INVALID_TOKEN", "Invalid token", 401)
 
     if not verify_operator_token(body.token, settings):
-        response.status_code = 401
-        return {"ok": False}
+        raise AppError("INVALID_TOKEN", "Invalid token", 401)
 
     token, exp = create_session_jwt(settings)
     response.set_cookie(
@@ -42,25 +40,25 @@ async def login(body: LoginRequest, response: Response) -> dict[str, bool]:
         value=token,
         httponly=True,
         samesite="strict",
-        secure=False,  # localhost dev; enable for HTTPS in production
+        secure=False,
         expires=int(exp.timestamp()),
         path="/",
     )
-    return {"ok": True}
+    return LoginResponse(ok=True)
 
 
-@router.post("/logout")
-async def logout(response: Response) -> dict[str, bool]:
+@router.post("/logout", response_model=LogoutResponse)
+async def logout(response: Response) -> LogoutResponse:
     """Clear the session cookie.  Always succeeds."""
     response.delete_cookie(key="session", path="/")
-    return {"ok": True}
+    return LogoutResponse(ok=True)
 
 
-@router.get("/me")
+@router.get("/me", response_model=MeResponse)
 async def me(
     _operator: str = Depends(get_current_operator),
     session: str | None = Cookie(default=None),
-) -> dict[str, str | None]:
+) -> MeResponse:
     """Return current operator info from the session JWT."""
     started_at: str | None = None
     if session:
@@ -69,4 +67,4 @@ async def me(
         iat = payload.get("iat")
         if isinstance(iat, int | float):
             started_at = datetime.fromtimestamp(iat, tz=UTC).isoformat()
-    return {"operator": "operator", "session_started_at": started_at}
+    return MeResponse(operator="operator", session_started_at=started_at)

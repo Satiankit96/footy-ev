@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from footy_ev_api.errors import AppError, app_error_handler
 from footy_ev_api.routers.auth import router as auth_router
 from footy_ev_api.routers.health import router as health_router
 from footy_ev_api.routers.shell import router as shell_router
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1/auth")
     app.include_router(shell_router, prefix="/api/v1")
