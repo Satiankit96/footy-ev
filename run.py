@@ -294,6 +294,19 @@ def paper_status(db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db-path")) -> 
             )
 
 
+@app.command("ui")  # type: ignore[misc]
+def ui() -> None:
+    """Launch the FastAPI + Next.js operator UI (dev mode)."""
+    script = Path(__file__).resolve().parent / "frontend" / "scripts" / "dev.ps1"
+    if not script.exists():
+        typer.echo("Frontend not installed. See frontend/README.md.")
+        raise typer.Exit(code=1)
+    subprocess.run(
+        ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+        check=True,
+    )
+
+
 @app.command("dashboard")  # type: ignore[misc]
 def dashboard() -> None:
     """Launch the Streamlit dashboard."""
