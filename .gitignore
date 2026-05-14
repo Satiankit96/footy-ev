@@ -34,6 +34,12 @@ data/
 build/
 dist/
 
+# Frontend
+frontend/web/node_modules/
+frontend/web/.next/
+frontend/web/out/
+frontend/api/.venv/
+
 # Logs
 *.log
 logs/
