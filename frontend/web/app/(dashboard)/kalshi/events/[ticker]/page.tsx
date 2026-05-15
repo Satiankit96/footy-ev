@@ -1,16 +1,12 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, LinkIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKalshiEventDetail } from "@/lib/api/hooks";
 import type { KalshiMarketResponse } from "@/lib/api/hooks";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { BootstrapModal } from "@/components/bootstrap/bootstrap-modal";
 
 const OU25_STRIKE = "2.5";
 
@@ -147,6 +143,8 @@ function AliasCard({
   status: string | null;
   fixtureId: string | null;
 }) {
+  const [showBootstrap, setShowBootstrap] = useState(false);
+
   if (status === "resolved" && fixtureId) {
     return (
       <div className="rounded-md border border-success/30 bg-success/10 px-4 py-3">
@@ -166,21 +164,24 @@ function AliasCard({
   }
 
   return (
-    <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
-      <div className="flex items-center gap-2">
-        <LinkIcon size={14} className="text-yellow-500" />
-        <span className="text-sm font-medium text-yellow-500">Unresolved</span>
+    <>
+      <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <LinkIcon size={14} className="text-yellow-500" />
+          <span className="text-sm font-medium text-yellow-500">Unresolved</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          onClick={() => setShowBootstrap(true)}
+        >
+          Bootstrap this event
+        </Button>
       </div>
-      <Tooltip>
-        <TooltipTrigger>
-          <span>
-            <Button variant="outline" size="sm" className="mt-2" disabled>
-              Bootstrap this event
-            </Button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Available in Stage 5</TooltipContent>
-      </Tooltip>
-    </div>
+      {showBootstrap && (
+        <BootstrapModal onClose={() => setShowBootstrap(false)} />
+      )}
+    </>
   );
 }
