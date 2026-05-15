@@ -14,6 +14,7 @@ from footy_ev_api.routers.fixtures import router as fixtures_router
 from footy_ev_api.routers.health import router as health_router
 from footy_ev_api.routers.kalshi import router as kalshi_router
 from footy_ev_api.routers.pipeline import router as pipeline_router
+from footy_ev_api.routers.predictions import router as predictions_router
 from footy_ev_api.routers.shell import router as shell_router
 from footy_ev_api.ws.jobs import ws_job
 from footy_ev_api.ws.pipeline import sync_broadcast, ws_freshness, ws_pipeline
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(aliases_router, prefix="/api/v1")
     app.include_router(bootstrap_router, prefix="/api/v1")
     app.include_router(fixtures_router, prefix="/api/v1")
+    app.include_router(predictions_router, prefix="/api/v1")
 
     app.websocket("/ws/v1/pipeline")(ws_pipeline)
     app.websocket("/ws/v1/freshness")(ws_freshness)
