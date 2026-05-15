@@ -28,3 +28,21 @@ export type {
   JobListResponse,
   FreshnessEntry,
 } from "./use-pipeline";
+
+export {
+  useKalshiCredentials,
+  useKalshiHealth,
+  useKalshiHealthCheck,
+  useKalshiEvents,
+  useKalshiEventDetail,
+  useKalshiMarketDetail,
+} from "./use-kalshi";
+export type {
+  KalshiCredentialsResponse,
+  KalshiHealthResponse,
+  KalshiEventResponse,
+  KalshiEventListResponse,
+  KalshiMarketResponse,
+  KalshiEventDetailResponse,
+  KalshiMarketDetailResponse,
+} from "./use-kalshi";

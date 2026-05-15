@@ -263,6 +263,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kalshi/credentials/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kalshi Credentials
+         * @description Check credential configuration without exposing secrets.
+         */
+        get: operations["kalshi_credentials_api_v1_kalshi_credentials_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kalshi/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kalshi Health
+         * @description Ping Kalshi API and report latency + clock skew.
+         */
+        get: operations["kalshi_health_api_v1_kalshi_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kalshi/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kalshi Series
+         * @description List available series. Returns a static list for now.
+         */
+        get: operations["kalshi_series_api_v1_kalshi_series_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kalshi/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kalshi Events
+         * @description List events for a Kalshi series with alias status from warehouse.
+         */
+        get: operations["kalshi_events_api_v1_kalshi_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kalshi/events/{event_ticker}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kalshi Event Detail
+         * @description Event detail with all markets under it.
+         */
+        get: operations["kalshi_event_detail_api_v1_kalshi_events__event_ticker__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kalshi/markets/{ticker}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kalshi Market Detail
+         * @description Single market detail with current prices and recent snapshots.
+         */
+        get: operations["kalshi_market_detail_api_v1_kalshi_markets__ticker__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -345,6 +465,136 @@ export interface components {
             progress: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * KalshiCredentialsResponse
+         * @description GET /api/v1/kalshi/credentials/status response.
+         */
+        KalshiCredentialsResponse: {
+            /** Configured */
+            configured: boolean;
+            /** Key Id Present */
+            key_id_present: boolean;
+            /** Private Key Present */
+            private_key_present: boolean;
+            /** Base Url */
+            base_url: string;
+            /** Is Demo */
+            is_demo: boolean;
+        };
+        /**
+         * KalshiEventDetailResponse
+         * @description GET /api/v1/kalshi/events/{event_ticker} response.
+         */
+        KalshiEventDetailResponse: {
+            event: components["schemas"]["KalshiEventResponse"];
+            /** Markets */
+            markets: components["schemas"]["KalshiMarketResponse"][];
+        };
+        /**
+         * KalshiEventListResponse
+         * @description GET /api/v1/kalshi/events response.
+         */
+        KalshiEventListResponse: {
+            /** Events */
+            events: components["schemas"]["KalshiEventResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * KalshiEventResponse
+         * @description Single Kalshi event in a list or detail view.
+         */
+        KalshiEventResponse: {
+            /** Event Ticker */
+            event_ticker: string;
+            /** Series Ticker */
+            series_ticker: string;
+            /** Title */
+            title: string;
+            /** Sub Title */
+            sub_title?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Alias Status */
+            alias_status?: string | null;
+            /** Fixture Id */
+            fixture_id?: string | null;
+        };
+        /**
+         * KalshiHealthResponse
+         * @description GET /api/v1/kalshi/health response.
+         */
+        KalshiHealthResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Latency Ms */
+            latency_ms: number | null;
+            /** Clock Skew S */
+            clock_skew_s: number | null;
+            /** Base Url */
+            base_url: string;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * KalshiMarketDetailResponse
+         * @description GET /api/v1/kalshi/markets/{ticker} response.
+         */
+        KalshiMarketDetailResponse: {
+            market: components["schemas"]["KalshiMarketResponse"];
+            /** Recent Snapshots */
+            recent_snapshots: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * KalshiMarketResponse
+         * @description Single Kalshi market with current pricing.
+         */
+        KalshiMarketResponse: {
+            /** Ticker */
+            ticker: string;
+            /** Event Ticker */
+            event_ticker: string;
+            /** Floor Strike */
+            floor_strike: string;
+            /** Yes Bid */
+            yes_bid: string;
+            /** No Bid */
+            no_bid: string;
+            /** Yes Ask */
+            yes_ask?: string | null;
+            /** No Ask */
+            no_ask?: string | null;
+            /** Yes Bid Size */
+            yes_bid_size?: number | null;
+            /** Yes Ask Size */
+            yes_ask_size?: number | null;
+            /** Decimal Odds */
+            decimal_odds?: string | null;
+            /** Implied Probability */
+            implied_probability?: string | null;
+        };
+        /**
+         * KalshiSeriesListResponse
+         * @description GET /api/v1/kalshi/series response.
+         */
+        KalshiSeriesListResponse: {
+            /** Series */
+            series: components["schemas"]["KalshiSeriesResponse"][];
+        };
+        /**
+         * KalshiSeriesResponse
+         * @description Single series entry.
+         */
+        KalshiSeriesResponse: {
+            /** Series Ticker */
+            series_ticker: string;
+            /** Title */
+            title: string;
+            /** Category */
+            category?: string | null;
         };
         /**
          * LoginRequest
@@ -884,6 +1134,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kalshi_credentials_api_v1_kalshi_credentials_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KalshiCredentialsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kalshi_health_api_v1_kalshi_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KalshiHealthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kalshi_series_api_v1_kalshi_series_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KalshiSeriesListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kalshi_events_api_v1_kalshi_events_get: {
+        parameters: {
+            query?: {
+                series?: string;
+                status?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KalshiEventListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kalshi_event_detail_api_v1_kalshi_events__event_ticker__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_ticker: string;
+            };
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KalshiEventDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kalshi_market_detail_api_v1_kalshi_markets__ticker__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticker: string;
+            };
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KalshiMarketDetailResponse"];
                 };
             };
             /** @description Validation Error */
