@@ -2,7 +2,22 @@
 
 Operator-facing web UI for the footy-ev betting pipeline. FastAPI backend + Next.js frontend, isolated in `frontend/` so the main pipeline runs independently.
 
-**Current state: Stage 0 complete.** Health endpoint only. See [PLAN.md](PLAN.md) for the full 15-stage build plan.
+**Current state: Stage 9 complete.** Risk dashboard, Kelly preview tool, bankroll panel, and exposure panel. See [PLAN.md](PLAN.md) for the full 15-stage build plan.
+
+## Quick Start
+
+For the full step-by-step setup and troubleshooting guide, see **[QUICKSTART.md](QUICKSTART.md)**.
+
+**TL;DR** (after first-time setup):
+
+```powershell
+# From the footy-ev project root
+uv run python run.py ui
+```
+
+Open http://localhost:3000, log in with your `UI_OPERATOR_TOKEN`.
+
+---
 
 ## Prerequisites
 

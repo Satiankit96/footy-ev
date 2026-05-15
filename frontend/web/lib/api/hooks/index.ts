@@ -104,6 +104,20 @@ export type {
 } from "./use-predictions";
 
 export {
+  useExposure,
+  useBankroll,
+  useKellyPreview,
+} from "./use-risk";
+export type {
+  ExposureFixture,
+  ExposureResponse,
+  BankrollPoint,
+  BankrollResponse,
+  KellyPreviewRequest,
+  KellyPreviewResponse,
+} from "./use-risk";
+
+export {
   useBets,
   useBetDetail,
   useBetsSummary,
