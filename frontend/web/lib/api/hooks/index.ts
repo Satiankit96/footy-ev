@@ -88,3 +88,17 @@ export type {
   FixtureListResponse,
   FixtureAliasInfo,
 } from "./use-fixtures";
+
+export {
+  usePredictions,
+  usePredictionDetail,
+  usePredictionFeatures,
+  useRunPredictions,
+} from "./use-predictions";
+export type {
+  PredictionResponse,
+  PredictionListResponse,
+  PredictionFeatureItem,
+  PredictionFeaturesResponse,
+  PredictionRunResponse,
+} from "./use-predictions";

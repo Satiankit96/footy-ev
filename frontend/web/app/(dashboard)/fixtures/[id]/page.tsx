@@ -6,8 +6,8 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useFixtureDetail } from "@/lib/api/hooks";
-import type { FixtureDetailResponse } from "@/lib/api/hooks";
+import { useFixtureDetail, usePredictions } from "@/lib/api/hooks";
+import type { FixtureDetailResponse, PredictionResponse } from "@/lib/api/hooks";
 import SnapshotTimelineChart from "@/components/charts/SnapshotTimelineChart";
 
 export default function FixtureDetailPage({
@@ -81,9 +81,7 @@ export default function FixtureDetailPage({
         </TabsContent>
 
         <TabsContent value="predictions">
-          <PlaceholderTab
-            message={`Predictions browser available in Stage 7. ${data.prediction_count} prediction${data.prediction_count !== 1 ? "s" : ""} for this fixture.`}
-          />
+          <PredictionsTab fixtureId={fixtureId} />
         </TabsContent>
 
         <TabsContent value="bets">
@@ -245,6 +243,76 @@ function AliasesTab({ fixture: f }: { fixture: FixtureDetailResponse }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function PredictionsTab({ fixtureId }: { fixtureId: string }) {
+  const { data, isLoading } = usePredictions({ fixture_id: fixtureId, limit: 100, offset: 0 });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const predictions = data?.predictions ?? [];
+
+  if (predictions.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-sm text-muted-foreground">
+          No predictions for this fixture yet.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-muted/50 text-left text-xs text-muted-foreground">
+            <th className="px-3 py-2 font-medium">Market</th>
+            <th className="px-3 py-2 font-medium">Sel.</th>
+            <th className="px-3 py-2 font-medium">p_raw</th>
+            <th className="px-3 py-2 font-medium">p_cal.</th>
+            <th className="px-3 py-2 font-medium">σ_p</th>
+            <th className="px-3 py-2 font-medium">Model</th>
+          </tr>
+        </thead>
+        <tbody>
+          {predictions.map((p) => (
+            <FixturePredictionRow key={p.prediction_id} prediction={p} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FixturePredictionRow({ prediction: p }: { prediction: PredictionResponse }) {
+  return (
+    <tr className="border-b border-border/50 hover:bg-muted/30">
+      <td className="px-3 py-2 text-xs">{p.market}</td>
+      <td className="px-3 py-2 text-xs">
+        <Badge variant="outline">{p.selection}</Badge>
+      </td>
+      <td className="px-3 py-2 font-mono text-xs">{p.p_raw.toFixed(4)}</td>
+      <td className="px-3 py-2 font-mono text-xs">
+        <Link
+          href={`/predictions/${encodeURIComponent(p.prediction_id)}`}
+          className="text-accent hover:underline"
+        >
+          {p.p_calibrated.toFixed(4)}
+        </Link>
+      </td>
+      <td className="px-3 py-2 font-mono text-xs">
+        {p.sigma_p != null ? p.sigma_p.toFixed(4) : "—"}
+      </td>
+      <td className="px-3 py-2 text-xs text-muted-foreground">{p.model_version}</td>
+    </tr>
   );
 }
 
