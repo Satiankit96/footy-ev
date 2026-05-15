@@ -76,3 +76,15 @@ export type {
   BootstrapJobResponse,
   BootstrapJobListResponse,
 } from "./use-bootstrap";
+
+export {
+  useFixtures,
+  useFixtureDetail,
+  useFixturesUpcoming,
+} from "./use-fixtures";
+export type {
+  FixtureResponse,
+  FixtureDetailResponse,
+  FixtureListResponse,
+  FixtureAliasInfo,
+} from "./use-fixtures";
