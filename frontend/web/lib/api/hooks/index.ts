@@ -102,3 +102,26 @@ export type {
   PredictionFeaturesResponse,
   PredictionRunResponse,
 } from "./use-predictions";
+
+export {
+  useBets,
+  useBetDetail,
+  useBetsSummary,
+  useBetsClvRolling,
+  useClvRolling,
+  useClvBreakdown,
+  useClvSources,
+  useClvBackfill,
+} from "./use-bets";
+export type {
+  BetResponse,
+  BetListResponse,
+  KellyBreakdown,
+  EdgeMath,
+  BetDetailResponse,
+  BetsSummaryResponse,
+  ClvRollingPoint,
+  ClvBreakdownItem,
+  ClvSourceItem,
+  ClvBackfillResponse,
+} from "./use-bets";

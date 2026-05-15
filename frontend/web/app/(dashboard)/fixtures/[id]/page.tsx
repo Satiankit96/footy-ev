@@ -6,8 +6,8 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useFixtureDetail, usePredictions } from "@/lib/api/hooks";
-import type { FixtureDetailResponse, PredictionResponse } from "@/lib/api/hooks";
+import { useFixtureDetail, usePredictions, useBets } from "@/lib/api/hooks";
+import type { FixtureDetailResponse, PredictionResponse, BetResponse } from "@/lib/api/hooks";
 import SnapshotTimelineChart from "@/components/charts/SnapshotTimelineChart";
 
 export default function FixtureDetailPage({
@@ -85,9 +85,7 @@ export default function FixtureDetailPage({
         </TabsContent>
 
         <TabsContent value="bets">
-          <PlaceholderTab
-            message={`Bets browser available in Stage 8. ${data.bet_count} paper bet${data.bet_count !== 1 ? "s" : ""} for this fixture.`}
-          />
+          <BetsTab fixtureId={fixtureId} />
         </TabsContent>
 
         <TabsContent value="snapshots">
@@ -316,13 +314,80 @@ function FixturePredictionRow({ prediction: p }: { prediction: PredictionRespons
   );
 }
 
-function PlaceholderTab({ message }: { message: string }) {
+function BetsTab({ fixtureId }: { fixtureId: string }) {
+  const { data, isLoading } = useBets({ fixture_id: fixtureId, limit: 100, offset: 0 });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const bets = data?.bets ?? [];
+
+  if (bets.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-sm text-muted-foreground">
+          No paper bets for this fixture yet.
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card>
-      <CardContent className="py-12 text-center text-sm text-muted-foreground">
-        {message}
-      </CardContent>
-    </Card>
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-muted/50 text-left text-xs text-muted-foreground">
+            <th className="px-3 py-2 font-medium">Market</th>
+            <th className="px-3 py-2 font-medium">Sel.</th>
+            <th className="px-3 py-2 font-medium">Odds</th>
+            <th className="px-3 py-2 font-medium">Stake</th>
+            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">CLV</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bets.map((b) => (
+            <FixtureBetRow key={b.decision_id} bet={b} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FixtureBetRow({ bet: b }: { bet: BetResponse }) {
+  const clvCls =
+    b.clv_pct == null
+      ? "text-muted-foreground"
+      : b.clv_pct >= 0
+        ? "text-green-500"
+        : "text-red-500";
+
+  return (
+    <tr className="border-b border-border/50 hover:bg-muted/30">
+      <td className="px-3 py-2 text-xs">{b.market}</td>
+      <td className="px-3 py-2 text-xs">
+        <Badge variant="outline">{b.selection}</Badge>
+      </td>
+      <td className="px-3 py-2 font-mono text-xs">{b.odds_at_decision.toFixed(2)}</td>
+      <td className="px-3 py-2 font-mono text-xs">
+        <Link
+          href={`/bets/${encodeURIComponent(b.decision_id)}`}
+          className="text-accent hover:underline"
+        >
+          £{b.stake_gbp}
+        </Link>
+      </td>
+      <td className="px-3 py-2 text-xs">{b.settlement_status}</td>
+      <td className={`px-3 py-2 font-mono text-xs font-medium ${clvCls}`}>
+        {b.clv_pct != null ? `${(b.clv_pct * 100).toFixed(2)}%` : "—"}
+      </td>
+    </tr>
   );
 }
 
