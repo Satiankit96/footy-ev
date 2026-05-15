@@ -84,17 +84,18 @@ class JobManager:
                 return self._get_job(self._active_job_id)
             return None
 
-    def start_cycle(
+    def start_job(
         self,
+        job_type: str,
         run_fn: Callable[[Job, Callable[[dict[str, Any]], None]], None],
     ) -> Job:
-        """Queue a pipeline cycle. Raises ValueError if one is already active."""
+        """Queue a generic background job. Raises ValueError if one is already active."""
         with self._lock:
             if self._active_job_id is not None:
                 raise ValueError("A job is already running")
             job = Job(
                 job_id=uuid.uuid4().hex[:12],
-                job_type="pipeline_cycle",
+                job_type=job_type,
                 status=JobStatus.QUEUED,
             )
             self._jobs.append(job)
@@ -107,6 +108,13 @@ class JobManager:
         )
         thread.start()
         return job
+
+    def start_cycle(
+        self,
+        run_fn: Callable[[Job, Callable[[dict[str, Any]], None]], None],
+    ) -> Job:
+        """Queue a pipeline cycle. Raises ValueError if one is already active."""
+        return self.start_job("pipeline_cycle", run_fn)
 
     def _run_job(
         self,
