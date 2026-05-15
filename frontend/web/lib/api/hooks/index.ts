@@ -46,3 +46,33 @@ export type {
   KalshiEventDetailResponse,
   KalshiMarketDetailResponse,
 } from "./use-kalshi";
+
+export {
+  useAliases,
+  useAlias,
+  useAliasConflicts,
+  useCreateAlias,
+  useRetireAlias,
+} from "./use-aliases";
+export type {
+  AliasResponse,
+  AliasListResponse,
+  AliasConflict,
+  AliasConflictsResponse,
+  AliasCreateRequest,
+  AliasRetireResponse,
+} from "./use-aliases";
+
+export {
+  useBootstrapPreview,
+  useBootstrapRun,
+  useBootstrapJobs,
+  useBootstrapJob,
+} from "./use-bootstrap";
+export type {
+  BootstrapRunRequest,
+  BootstrapRunResponse,
+  BootstrapPreviewResponse,
+  BootstrapJobResponse,
+  BootstrapJobListResponse,
+} from "./use-bootstrap";
