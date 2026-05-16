@@ -6,7 +6,7 @@ Goal: sustainable 3–8% yield on turnover, measured by closing-line value (CLV)
 
 ## Status
 
-**Phase 3 step 5c complete.** Pipeline is end-to-end functional against Kalshi demo. Project ~88% complete; remainder is operational paper-trading runs, not code.
+**Frontend module complete (15/15 stages).** Pipeline is end-to-end functional against Kalshi demo. The web UI is now the primary operator interface — use it instead of `run.py` for daily operations.
 
 For detailed state see [HANDOFF.md](./HANDOFF.md). Architecture in [BLUE_MAP.md](./BLUE_MAP.md). Project rules in [PROJECT_INSTRUCTIONS.md](./PROJECT_INSTRUCTIONS.md). Always-on Claude Code context in [CLAUDE.md](./CLAUDE.md).
 
@@ -53,11 +53,19 @@ uv run python run.py status
 
 ### Daily Operation
 
+**Preferred — use the web UI:**
+
+```powershell
+uv run python run.py ui    # starts FastAPI + Next.js, open http://localhost:3000
+```
+
+**CLI fallback:**
+
 ```powershell
 uv run python run.py                            # one cycle
 uv run python run.py loop --interval-min 15     # continuous
-uv run python run.py dashboard                  # Streamlit UI
 uv run python run.py bootstrap                  # refresh aliases (run weekly)
+uv run python run.py status                     # warehouse-only state table
 ```
 
 ### Testing
@@ -98,6 +106,24 @@ Key tables: `fixtures`, `kalshi_event_aliases`, `kalshi_contract_resolutions`, `
 - **Zero-bid handling drops snapshots.** Markets with `yes_bid_dollars == "0.0000"` are logged at DEBUG and skipped. Liquidity-history retention is on the deferred list.
 - **Demo only.** Production requires separate registration. `KALSHI_API_BASE_URL` is the switch.
 
+## Frontend (Primary Operator Interface)
+
+The web UI exposes every pipeline action and state through a browser. All 15 build stages complete.
+
+- **Quick start:** [frontend/QUICKSTART.md](./frontend/QUICKSTART.md)
+- **Full docs:** [frontend/README.md](./frontend/README.md)
+- **Build history:** [frontend/PROGRESS.md](./frontend/PROGRESS.md)
+
+```powershell
+uv run python run.py ui    # starts both servers; open http://localhost:3000
+```
+
+**Pages:** Dashboard · Pipeline · Kalshi · Aliases · Fixtures · Predictions · Bets · CLV · Risk · Warehouse · Diagnostics · Audit · Live Trading · Settings
+
+**Tests:** 125 backend API tests passing · 129 frontend unit tests passing · 5 E2E Playwright flows
+
+---
+
 ## Project Structure
 
 ```
@@ -118,7 +144,13 @@ footy-ev/
 │   ├── runtime/                 ← paper_trader, settlement, CLV backfill
 │   ├── models/                  ← xG-Skellam, XGBoost, Dixon-Coles (parked)
 │   ├── db/                      ← schema, migrations
-│   └── dashboard/               ← Streamlit app
+│   └── dashboard/               ← Streamlit app (superseded by web UI)
+├── frontend/                    ← web UI (FastAPI + Next.js) — primary interface
+│   ├── README.md                ← frontend docs
+│   ├── QUICKSTART.md            ← first-run guide
+│   ├── PROGRESS.md              ← build history
+│   ├── api/                     ← FastAPI backend (48 endpoints)
+│   └── web/                     ← Next.js frontend (21 routes)
 ├── scripts/                     ← bootstrap + ingestion scripts
 ├── tests/
 │   ├── unit/
