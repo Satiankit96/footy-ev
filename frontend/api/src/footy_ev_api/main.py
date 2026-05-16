@@ -18,6 +18,7 @@ from footy_ev_api.routers.diagnostics import router as diagnostics_router
 from footy_ev_api.routers.fixtures import router as fixtures_router
 from footy_ev_api.routers.health import router as health_router
 from footy_ev_api.routers.kalshi import router as kalshi_router
+from footy_ev_api.routers.live_trading import router as live_trading_router
 from footy_ev_api.routers.pipeline import router as pipeline_router
 from footy_ev_api.routers.predictions import router as predictions_router
 from footy_ev_api.routers.risk import router as risk_router
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouse_router, prefix="/api/v1")
     app.include_router(diagnostics_router, prefix="/api/v1")
     app.include_router(audit_router, prefix="/api/v1")
+    app.include_router(live_trading_router, prefix="/api/v1")
 
     app.websocket("/ws/v1/pipeline")(ws_pipeline)
     app.websocket("/ws/v1/freshness")(ws_freshness)
