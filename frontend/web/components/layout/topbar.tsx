@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Moon, Sun, User } from "lucide-react";
+import { Moon, Search, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 import { useShell, useMe } from "@/lib/api/hooks";
 import { VenuePill } from "./venue-pill";
 import { CircuitBreakerLED } from "./circuit-breaker-led";
+import { openPalette } from "@/components/command-palette";
 
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard",
@@ -51,6 +52,19 @@ export function Topbar() {
       <h1 className="text-lg font-semibold">{title}</h1>
 
       <div className="flex items-center gap-3">
+        {/* Cmd-K trigger */}
+        <button
+          onClick={openPalette}
+          className="hidden items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/80 sm:flex"
+          aria-label="Open command palette"
+        >
+          <Search className="h-3 w-3" />
+          Search…
+          <kbd className="ml-1 rounded border border-border bg-background px-1 py-0.5 text-[10px]">
+            ⌘K
+          </kbd>
+        </button>
+
         <Button
           variant="ghost"
           size="icon"

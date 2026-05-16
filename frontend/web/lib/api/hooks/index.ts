@@ -171,6 +171,9 @@ export type {
   DecisionsResponse,
 } from "./use-audit";
 
+export { useSettings, useSaveSettings } from "./use-settings";
+export type { SettingsResponse } from "./use-settings";
+
 export {
   useLiveTradingStatus,
   useCheckConditions,
