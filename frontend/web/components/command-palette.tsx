@@ -56,6 +56,10 @@ export function openPalette() {
   setOpen(true);
 }
 
+export function closePalette() {
+  setOpen(false);
+}
+
 function usePaletteOpen() {
   const [open, setLocalOpen] = useState(_open);
   useEffect(() => {
