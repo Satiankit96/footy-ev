@@ -7,11 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from footy_ev_api.errors import AppError, app_error_handler
 from footy_ev_api.jobs.manager import JobManager
+from footy_ev_api.middleware.audit import AuditMiddleware, setup_log_capture
 from footy_ev_api.routers.aliases import router as aliases_router
+from footy_ev_api.routers.audit import router as audit_router
 from footy_ev_api.routers.auth import router as auth_router
 from footy_ev_api.routers.bets import router as bets_router
 from footy_ev_api.routers.bootstrap import router as bootstrap_router
 from footy_ev_api.routers.clv import router as clv_router
+from footy_ev_api.routers.diagnostics import router as diagnostics_router
 from footy_ev_api.routers.fixtures import router as fixtures_router
 from footy_ev_api.routers.health import router as health_router
 from footy_ev_api.routers.kalshi import router as kalshi_router
@@ -33,6 +36,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/api/v1/openapi.json",
     )
+    setup_log_capture()
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000"],
@@ -54,6 +59,8 @@ def create_app() -> FastAPI:
     app.include_router(clv_router, prefix="/api/v1")
     app.include_router(risk_router, prefix="/api/v1")
     app.include_router(warehouse_router, prefix="/api/v1")
+    app.include_router(diagnostics_router, prefix="/api/v1")
+    app.include_router(audit_router, prefix="/api/v1")
 
     app.websocket("/ws/v1/pipeline")(ws_pipeline)
     app.websocket("/ws/v1/freshness")(ws_freshness)

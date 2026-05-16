@@ -141,6 +141,37 @@ export type {
 } from "./use-warehouse";
 
 export {
+  useCircuitBreaker,
+  useResetCircuitBreaker,
+  useDiagnosticsLogs,
+  useDiagnosticsMigrations,
+  useDiagnosticsEnv,
+} from "./use-diagnostics";
+export type {
+  CircuitBreakerState,
+  MigrationInfo,
+  MigrationListResponse,
+  EnvVarInfo,
+  EnvCheckResponse,
+  LogEntry,
+  LogsResponse,
+} from "./use-diagnostics";
+
+export {
+  useOperatorActions,
+  useModelVersions,
+  useDecisions,
+} from "./use-audit";
+export type {
+  OperatorActionRow,
+  OperatorActionsResponse,
+  ModelVersionRow,
+  ModelVersionsResponse,
+  DecisionRow,
+  DecisionsResponse,
+} from "./use-audit";
+
+export {
   useBets,
   useBetDetail,
   useBetsSummary,
